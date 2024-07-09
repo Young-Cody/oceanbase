@@ -32,7 +32,7 @@ namespace rootserver
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 
-// Partition Balance implment
+// Partition Balance implement
 class ObPartitionBalance final : public ObAllBalanceGroupBuilder::NewPartitionCallback
 {
 public:
@@ -192,14 +192,6 @@ public:
 private:
   int prepare_balance_group_();
   int save_balance_group_stat_();
-  int construct_balance_group_();
-  int construct_bg_for_partlevel_zero_(const schema::ObSimpleTableSchemaV2 &table_schema);
-  int construct_bg_for_partlevel_one_(const schema::ObSimpleTableSchemaV2 &table_schema);
-  int construct_bg_for_partlevel_two_(const schema::ObSimpleTableSchemaV2 &table_schema);
-  int construct_bg_for_tablegroup_sharding_none_(const schema::ObSimpleTablegroupSchema &tablegroup_schema, ObArray<const schema::ObSimpleTableSchemaV2*> &table_schemas);
-  int construct_bg_for_tablegroup_sharding_partition_(const schema::ObSimpleTablegroupSchema &tablegroup_schema, ObArray<const schema::ObSimpleTableSchemaV2*> &table_schemas);
-  int construct_bg_for_tablegroup_sharding_subpart_(const schema::ObSimpleTablegroupSchema &tablegroup_schema, ObArray<const schema::ObSimpleTableSchemaV2*> &table_schemas);
-  int add_tablet_to_bg_(ObTransferPartGroup *&dest_part_group, ObLSID &dest_ls_id, ObTabletID tablet_id, ObBalanceGroupID &bg_id, ObObjectID table_id, ObObjectID part_id);
   // balance group inner balance
   int process_balance_partition_inner_();
   // balance group extend balance

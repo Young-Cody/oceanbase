@@ -86,6 +86,7 @@ void ObTransferPartitionHelper::destroy()
   balance_job_.reset();
   max_task_id_.reset();
 }
+
 int ObTransferPartitionHelper::check_inner_stat_()
 {
   int ret = OB_SUCCESS;
@@ -485,14 +486,14 @@ int ObTransferPartitionHelper::process_in_trans(
     ObBalanceJobID job_id;
     ObBalanceJobStatus job_status(ObBalanceJobStatus::BALANCE_JOB_STATUS_DOING);
     ObBalanceJobType job_type(ObBalanceJobType::BALANCE_JOB_TRANSFER_PARTITION);
-    const char* balance_stradegy = "manual transfer partition"; // TODO
+    const char* balance_strategy = "manual transfer partition"; // TODO
     ObString comment;
 
     if (OB_FAIL(ObCommonIDUtils::gen_unique_id(tenant_id_, job_id))) {
       LOG_WARN("gen_unique_id", KR(ret), K(tenant_id_));
     } else if (OB_FAIL(balance_job_.init(tenant_id_, job_id, job_type, job_status,
             primary_zone_num, unit_num,
-            comment, ObString(balance_stradegy)))) {
+            comment, ObString(balance_strategy)))) {
       LOG_WARN("job init fail", KR(ret), K(tenant_id_), K(job_id),
           K(primary_zone_num), K(unit_num));
     } else {

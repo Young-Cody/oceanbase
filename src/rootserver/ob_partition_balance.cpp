@@ -354,7 +354,7 @@ int ObPartitionBalance::process_balance_partition_inner_()
       ObLSPartGroupDesc *ls_max = ls_part_desc_arr.at(ls_cnt - 1);
       ObLSPartGroupDesc *ls_min = ls_part_desc_arr.at(0);
       //If difference in number of partition groups between LS does not exceed 1, this balance group is balanced
-      if (ls_part_desc_arr.at(ls_cnt - 1)->get_part_group_count() - ls_part_desc_arr.at(0)->get_part_group_count() <= 1) {
+      if ((ls_max->get_part_group_count() - ls_min->get_part_group_count()) <= 1) {
         // balance group has done
         break;
       }
@@ -497,7 +497,7 @@ int ObPartitionBalance::process_balance_partition_extend_()
 
     ObLSDesc *ls_max = ls_desc_array_.at(ls_cnt - 1);
     ObLSDesc *ls_min = ls_desc_array_.at(0);
-    if (ls_max->get_partgroup_cnt() - ls_min->get_partgroup_cnt() <= 1) {
+    if ((ls_max->get_partgroup_cnt() - ls_min->get_partgroup_cnt()) <= 1) {
       break;
     }
     /*
@@ -511,7 +511,7 @@ int ObPartitionBalance::process_balance_partition_extend_()
     int64_t ls_more_dest = 0;
     ObLSDesc *ls_less_desc = nullptr;
     int64_t ls_less_dest = 0;
-    for (int64_t ls_idx = ls_desc_array_.count() -1; ls_idx >= 0; ls_idx--) {
+    for (int64_t ls_idx = ls_desc_array_.count() - 1; ls_idx >= 0; ls_idx--) {
       int64_t part_dest = ls_idx < (ls_cnt - (part_group_sum % ls_cnt)) ? part_group_sum / ls_cnt : part_group_sum / ls_cnt + 1;;
       if (ls_desc_array_.at(ls_idx)->get_partgroup_cnt() > part_dest) {
         ls_more_desc = ls_desc_array_.at(ls_idx);
@@ -582,10 +582,6 @@ int ObPartitionBalance::process_balance_partition_disk_()
   int ret = OB_SUCCESS;
 
   int64_t ls_cnt = ls_desc_array_.count();
-  int64_t part_size_sum = 0;
-  for (int64_t i = 0; i < ls_cnt; i++) {
-    part_size_sum += ls_desc_array_.at(i)->get_data_size();
-  }
   while (OB_SUCC(ret)) {
     std::sort(ls_desc_array_.begin(), ls_desc_array_.end(), [] (ObLSDesc *l, ObLSDesc *r) {
       if (l->get_data_size() < r->get_data_size()) {
@@ -706,13 +702,13 @@ int ObPartitionBalance::generate_balance_job_from_logical_task_()
   ObBalanceJobID job_id;
   ObBalanceJobStatus job_status(ObBalanceJobStatus::BALANCE_JOB_STATUS_DOING);
   ObBalanceJobType job_type(ObBalanceJobType::BALANCE_JOB_PARTITION);
-  const char* balance_stradegy = "partition balance"; // TODO
+  const char* balance_strategy = "partition balance"; // TODO
   ObString comment;
 
   if (OB_FAIL(ObCommonIDUtils::gen_unique_id(tenant_id_, job_id))) {
     LOG_WARN("gen_unique_id", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(balance_job_.init(tenant_id_, job_id, job_type, job_status, primary_zone_num_, unit_group_num_,
-          comment, ObString(balance_stradegy)))) {
+          comment, ObString(balance_strategy)))) {
     LOG_WARN("job init fail", KR(ret), K(tenant_id_), K(job_id));
   } else {
     for (auto iter = transfer_logical_tasks_.begin(); OB_SUCC(ret) && iter != transfer_logical_tasks_.end(); iter++) {
@@ -807,7 +803,7 @@ int ObPartitionHelper::check_partition_option(const schema::ObSimpleTableSchemaV
   int ret = OB_SUCCESS;
   is_matched = false;
   if (OB_FAIL(share::schema::ObSimpleTableSchemaV2::compare_partition_option(t1, t2, is_subpart, is_matched))) {
-    LOG_WARN("fail to compare partition optition", KR(ret));
+    LOG_WARN("fail to compare partition option", KR(ret));
   }
   return ret;
 }

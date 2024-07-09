@@ -294,7 +294,7 @@ int ObBalanceJobTableOperator::fill_dml_spliter(share::ObDMLSqlSplicer &dml,
       || OB_FAIL(dml.add_column("job_type", job.get_job_type().to_str()))
       || OB_FAIL(dml.add_column("status", job.get_job_status().to_str()))
       || OB_FAIL(dml.add_column("target_primary_zone_num", job.get_primary_zone_num()))
-     || OB_FAIL(dml.add_column("target_unit_num", job.get_unit_group_num()))
+      || OB_FAIL(dml.add_column("target_unit_num", job.get_unit_group_num()))
       || OB_FAIL(dml.add_column("comment", job.get_comment().string()))) {
     LOG_WARN("failed to fill dml spliter", KR(ret), K(job));
   }

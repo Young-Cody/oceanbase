@@ -137,7 +137,7 @@ private:
       const ObLSID &src_ls, const ObLSID &dest_ls,
       uint64_t &src_ls_group, uint64_t &dest_ls_group);
   //通过按照tablet_id,object_id排查的part_list或者按照table_id排查过的table_schema
- int batch_get_table_schema_in_order_(
+  int batch_get_table_schema_in_order_(
       common::ObArenaAllocator &allocator,
       ObArray<ObSimpleTableSchemaV2*> &table_schema_array);
 private:

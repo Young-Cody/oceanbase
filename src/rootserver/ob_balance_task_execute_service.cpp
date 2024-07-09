@@ -103,8 +103,8 @@ int ObBalanceTaskExecuteService::wait_tenant_ready_()
         is_ready = true;
       }
 
-      if (! is_ready) {
-        idle(10 * 1000 *1000);
+      if (!is_ready) {
+        idle(10 * 1000 * 1000);
       }
     }
 
@@ -157,7 +157,7 @@ void ObBalanceTaskExecuteService::do_work()
       task_array_.reset();
       DEBUG_SYNC(BEFORE_PROCESS_BALANCE_EXECUTE_WORK);
       //TODO, check schema ready
-     if (OB_FAIL(ObBalanceTaskTableOperator::load_can_execute_task(
+      if (OB_FAIL(ObBalanceTaskTableOperator::load_can_execute_task(
              tenant_id_, task_array_, *sql_proxy_))) {
         LOG_WARN("failed to load all balance task", KR(ret), K(tenant_id_));
       } else if (OB_FAIL(execute_task_())) {
@@ -513,6 +513,7 @@ int ObBalanceTaskExecuteService::cancel_current_task_status_(
   }
   return ret;
 }
+
 int ObBalanceTaskExecuteService::cancel_other_init_task_(
     const share::ObBalanceTask &task, ObMySQLTransaction &trans)
 {
@@ -914,7 +915,7 @@ int ObBalanceTaskExecuteService::finish_transfer_partition_task_(
       && finish_list.count() > 0) {
     ObString comment("Partition transfer to dest LS");
     ObTransferPartitionTaskStatus status =
-      ObTransferPartitionTaskStatus::TRP_TASK_STATUS_COMPLETED;
+    ObTransferPartitionTaskStatus::TRP_TASK_STATUS_COMPLETED;
     ObLSID task_dest_ls;
     ObTransferPartList new_finish_list;
     ObTransferPartitionTaskID max_task_id;

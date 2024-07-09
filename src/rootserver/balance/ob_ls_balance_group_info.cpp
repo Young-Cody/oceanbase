@@ -182,8 +182,8 @@ int ObLSBalanceGroupInfo::transfer_out_by_factor(const float factor,
 
         if (remove_count >= avail_count) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("remove count should be greater than avail count", K(avail_count), K(remove_count));
-        // transfer out part only when remove count > 0
+          LOG_WARN("remove count should be less than avail count", K(avail_count), K(remove_count));
+          // transfer out part only when remove count > 0
         } else if (remove_count > 0) {
           if (0 == dst_bg_info->get_part_group_count()) {
             if (OB_FAIL(src_bg_info->get_bucket_closest_to_empty(bucket_idx))) {
