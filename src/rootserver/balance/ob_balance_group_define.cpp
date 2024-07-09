@@ -75,6 +75,7 @@ int ObBalanceGroup::init_by_table(const ObSimpleTableSchemaV2 &table_schema,
 {
   int ret = OB_SUCCESS;
   ObSqlString bg_name_str;
+  const uint64_t database_id = table_schema.get_database_id();
   const uint64_t table_id = table_schema.get_table_id();
   const ObString &table_name = table_schema.get_table_name();
   const int64_t part_level = table_schema.get_part_level();
@@ -86,11 +87,11 @@ int ObBalanceGroup::init_by_table(const ObSimpleTableSchemaV2 &table_schema,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table is in tablegroup, should init balance group by tablegroup", KR(ret), K(table_schema));
   } else if (PARTITION_LEVEL_ZERO == part_level) {
-    // All tenant's non-partition table is a balance group
-    if (OB_FAIL(bg_name_str.append_fmt("%s", NON_PART_BG_NAME))) {
+    // All non-partition tables in each database is a balance group
+    if (OB_FAIL(bg_name_str.append_fmt("DATABASE_%lu_%s", database_id, NON_PART_BG_NAME))) {
       LOG_WARN("fail to append fmt", KR(ret), K(table_schema));
     } else {
-      id_ = ObBalanceGroupID(0, 0);
+      id_ = ObBalanceGroupID(database_id, 0);
     }
   } else if (PARTITION_LEVEL_ONE == part_level) {
     // Level one partition table is a single balance group

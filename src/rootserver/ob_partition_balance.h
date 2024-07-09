@@ -88,29 +88,51 @@ public:
   class ObLSPartGroupDesc
   {
   public:
-    ObLSPartGroupDesc(ObLSID ls_id, ObIAllocator &alloc) :
-        ls_id_(ls_id),
+    ObLSPartGroupDesc(ObIAllocator &alloc) :
+        inited_(false),
+        ls_id_(),
         alloc_(alloc),
-        part_groups_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(alloc, "LSPartGroupDesc")) {}
+        part_group_buckets_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(alloc, "LSPartGroupDesc")),
+        ls_num_(0),
+        part_group_cnt_(0) {}
     ~ObLSPartGroupDesc() {
+      inited_ = false;
       ls_id_.reset();
-      for (int64_t i = 0; i < part_groups_.count(); i++) {
-        if (OB_NOT_NULL(part_groups_.at(i))) {
-          part_groups_.at(i)->~ObTransferPartGroup();
-          alloc_.free(part_groups_.at(i));
-          part_groups_.at(i) = NULL;
+      for (int64_t i = 0; i < part_group_buckets_.count(); i++) {
+        ObArray<ObTransferPartGroup *> part_groups = part_group_buckets_.at(i);
+        for (int64_t j = 0; j < part_groups.count(); j++) {
+          if (OB_NOT_NULL(part_groups.at(j))) {
+            part_groups.at(j)->~ObTransferPartGroup();
+            alloc_.free(part_groups.at(j));
+            part_groups.at(j) = NULL;
+          }
         }
+        part_groups.reset();
       }
-      part_groups_.reset();
+      part_group_buckets_.reset();
+      ls_num_ = 0;
+      part_group_cnt_ = 0;
     }
+    int init(const ObLSID &ls_id, int64_t ls_num);
+    bool is_valid() const { return inited_; }
     ObLSID get_ls_id() const { return ls_id_; }
-    ObArray<ObTransferPartGroup *> &get_part_groups() { return part_groups_; }
-    int add_new_part_group(ObTransferPartGroup *&part_gourp);
-    TO_STRING_KV(K_(ls_id), K_(part_groups));
+    int add_new_part_group(const uint64_t part_group_uid, ObTransferPartGroup *&part_group);
+    int64_t get_part_group_count() const { return part_group_cnt_; }
+    int get_largest_part_group(int64_t &bucket_idx, int64_t &pg_idx, ObTransferPartGroup *&part_group) const;
+    int get_smallest_part_group(int64_t &bucket_idx, int64_t &pg_idx, ObTransferPartGroup *&part_group) const;
+    int get_fullest_bucket(int64_t &bucket_idx) const;
+    int get_bucket_closest_to_empty(int64_t &bucket_idx) const;
+    int transfer_out(int64_t bucket_idx, ObLSPartGroupDesc &dest_ls_pg, ObTransferPartGroup *&part_group);
+    int remove_part_group(const int64_t bucket_idx, const int64_t pg_idx);
+    int add_part_group(const int64_t bucket_idx, ObTransferPartGroup *const part_group);
+    TO_STRING_KV(K_(ls_id), K_(part_group_buckets));
   private:
+    bool inited_;
     ObLSID ls_id_;
     ObIAllocator &alloc_;
-    ObArray<ObTransferPartGroup *> part_groups_;
+    ObArray<ObArray<ObTransferPartGroup *>> part_group_buckets_;
+    int64_t ls_num_;
+    int64_t part_group_cnt_;
   };
 
   class ObLSDesc
@@ -187,7 +209,7 @@ private:
   int generate_balance_job_from_logical_task_();
 
   int prepare_ls_();
-  int add_new_pg_to_bg_map_(const ObLSID &ls_id, ObBalanceGroup &bg, ObTransferPartGroup *&part_group);
+  int add_new_pg_to_bg_map_(const ObLSID &ls_id, const uint64_t part_group_uid, ObBalanceGroup &bg, ObTransferPartGroup *&part_group);
   int add_transfer_task_(const ObLSID &src_ls_id, const ObLSID &dest_ls_id, ObTransferPartGroup *part_group, bool modify_ls_desc = true);
   int update_ls_desc_(const ObLSID &ls_id, int64_t cnt, int64_t size);
   int try_swap_part_group_(ObLSDesc &src_ls, ObLSDesc &dest_ls, int64_t part_group_min_size ,int64_t &swap_cnt);

@@ -48,7 +48,7 @@ public:
 
   // add new partition into partition group
   int add_part(const share::ObTransferPartInfo &part, int64_t data_size);
-
+  
   TO_STRING_KV(K_(data_size), K_(part_list));
 private:
   int64_t data_size_;
@@ -61,20 +61,25 @@ private:
 class ObBalanceGroupInfo final
 {
 public:
-  explicit ObBalanceGroupInfo(const ObBalanceGroupID &id, common::ObIAllocator &alloc) :
-      id_(id),
+  explicit ObBalanceGroupInfo(common::ObIAllocator &alloc) :
+      inited_(false),
+      id_(),
       last_part_group_uid_(OB_INVALID_ID),
+      last_part_group_(NULL),
       alloc_(alloc),
-      part_groups_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(alloc, "PartGroupArray"))
+      part_group_buckets_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(alloc, "PartGroupArray")),
+      part_group_cnt_(0),
+      target_ls_num_(0)
   {
   }
 
   ~ObBalanceGroupInfo();
 
-  bool is_valid() { return id_.is_valid(); }
+  int init(const ObBalanceGroupID &bg_id, const int64_t target_ls_num);
+
+  bool is_valid() { return inited_ && id_.is_valid(); }
   const ObBalanceGroupID &id() const { return id_; }
-  const common::ObArray<ObTransferPartGroup *> get_part_groups() const { return part_groups_; }
-  int64_t get_part_group_count() const { return part_groups_.count(); }
+  int64_t get_part_group_count() const { return part_group_cnt_; }
 
   // append partition at the newest partition group. create new partition group if needed
   //
@@ -89,26 +94,38 @@ public:
       const int64_t data_size,
       const uint64_t part_group_uid);
 
-  // pop partition groups from back of array, and push back into part list
+  // transfer out partition groups in bucket `bucket_idx`
   //
-  // @param [in] part_group_count           partition group count that need be popped
-  // @param [in/out] part_list              push popped part into the part list
-  // @param [out] popped_part_count         popped partition count
-  int pop_back(const int64_t part_group_count,
-      share::ObTransferPartList &part,
-      int64_t &popped_part_count);
+  // @param [in] part_group_count           partition group count that need be removed
+  // @param [in] bucket_idx                 transfer out partition groups in bucket `bucket_idx`
+  // @param [in/out] dst_bg_info            push transfered out part group into dst_bg_info
+  // @param [in/out] part_list              push transfered out part into the part list
+  // @param [out] removed_part_count        removed partition count
+  int transfer_out(const int64_t part_group_count,
+      int64_t bucket_idx,
+      ObBalanceGroupInfo &dst_bg_info,
+      share::ObTransferPartList &part_list,
+      int64_t &removed_part_count);
 
-  TO_STRING_KV(K_(id), "part_group_count", part_groups_.count());
+  int get_bucket_closest_to_empty(int64_t &bucket_idx) const;
+  int get_fullest_bucket(int64_t &bucket_idx) const;
+
+  TO_STRING_KV(K_(id), "part_group_count", part_group_cnt_);
 
 private:
   int create_new_part_group_if_needed_(const uint64_t part_group_uid);
+  int append_part_group(const int64_t bucket_idx, ObTransferPartGroup *part_group);
 
 private:
+  bool inited_;
   ObBalanceGroupID id_;
   int64_t last_part_group_uid_; // unique id of the last part group in part_groups_
+  ObTransferPartGroup *last_part_group_;
   ObIAllocator &alloc_; // allocator for ObTransferPartGroup
   // Partition Group Array
-  common::ObArray<ObTransferPartGroup *> part_groups_;
+  common::ObArray<common::ObArray<ObTransferPartGroup *>> part_group_buckets_;
+  int64_t part_group_cnt_;
+  int64_t target_ls_num_;
 };
 
 }

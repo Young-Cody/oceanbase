@@ -22,7 +22,7 @@ using namespace common;
 namespace rootserver
 {
 
-int ObTenantLSBalanceGroupInfo::init(const uint64_t tenant_id)
+int ObTenantLSBalanceGroupInfo::init(const uint64_t tenant_id, int64_t target_ls_num)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
@@ -35,6 +35,7 @@ int ObTenantLSBalanceGroupInfo::init(const uint64_t tenant_id)
     LOG_WARN("create map for tenant balance group info fail", KR(ret), LITERAL_K(MAP_BUCKET_NUM));
   } else {
     tenant_id_ = tenant_id;
+    target_ls_num_ = target_ls_num;
     inited_ = true;
   }
   return ret;
@@ -100,7 +101,7 @@ int ObTenantLSBalanceGroupInfo::on_new_partition(
   } else if (OB_FAIL(ls_bg_map_.get_refactored(src_ls_id, ls_bg_info))) {
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("get ls balance group info from map fail", KR(ret), K(src_ls_id));
-    } else if (OB_FAIL(create_new_ls_bg_info_(src_ls_id, ls_bg_info))) {
+    } else if (OB_FAIL(create_new_ls_bg_info(src_ls_id, ls_bg_info))) {
       LOG_WARN("create new ls balance group info fail", KR(ret), K(src_ls_id));
     } else if (OB_FAIL(ls_bg_map_.set_refactored(src_ls_id, ls_bg_info))) {
       LOG_WARN("set new ls balance group info fail", KR(ret), K(src_ls_id), K(ls_bg_info));
@@ -118,7 +119,7 @@ int ObTenantLSBalanceGroupInfo::on_new_partition(
   return ret;
 }
 
-int ObTenantLSBalanceGroupInfo::create_new_ls_bg_info_(const ObLSID ls_id,
+int ObTenantLSBalanceGroupInfo::create_new_ls_bg_info(const ObLSID ls_id,
     ObLSBalanceGroupInfo *&ls_bg_info)
 {
   int ret = OB_SUCCESS;
@@ -126,10 +127,10 @@ int ObTenantLSBalanceGroupInfo::create_new_ls_bg_info_(const ObLSID ls_id,
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory for ObLSBalanceGroupInfo fail", KR(ret), K(buf));
-  } else if (OB_ISNULL(ls_bg_info = new(buf) ObLSBalanceGroupInfo())) {
+  } else if (OB_ISNULL(ls_bg_info = new(buf) ObLSBalanceGroupInfo(alloc_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("construct ObLSBalanceGroupInfo fail", KR(ret));
-  } else if (OB_FAIL(ls_bg_info->init(ls_id))) {
+  } else if (OB_FAIL(ls_bg_info->init(ls_id, target_ls_num_))) {
     LOG_WARN("init ls balance group info fail", KR(ret), K(ls_id), KPC(ls_bg_info));
   }
   return ret;

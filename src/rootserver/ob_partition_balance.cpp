@@ -216,7 +216,7 @@ int ObPartitionBalance::on_new_partition(
     const bool in_new_partition_group,
     const uint64_t part_group_uid)
 {
-  UNUSEDx(tablet_id, part_group_uid);
+  UNUSEDx(tablet_id);
   int ret = OB_SUCCESS;
   ObBalanceGroup bg = bg_in; // get a copy
   ObLSDesc *src_ls_desc = nullptr;
@@ -245,7 +245,7 @@ int ObPartitionBalance::on_new_partition(
     // create partition group if in new partition group
     if (in_new_partition_group) {
       ObTransferPartGroup *new_pg = NULL;
-      if (OB_FAIL(add_new_pg_to_bg_map_(src_ls_id, bg, new_pg))) {
+      if (OB_FAIL(add_new_pg_to_bg_map_(src_ls_id, part_group_uid, bg, new_pg))) {
         LOG_WARN("add new partition group to balance group failed", KR(ret), K(src_ls_id), K(bg), K(new_pg));
       } else if (OB_ISNULL(new_pg)) {
         ret = OB_ERR_UNEXPECTED;
@@ -276,6 +276,7 @@ int ObPartitionBalance::on_new_partition(
 
 int ObPartitionBalance::add_new_pg_to_bg_map_(
     const ObLSID &ls_id,
+    const uint64_t part_group_uid,
     ObBalanceGroup &bg,
     ObTransferPartGroup *&part_group)
 {
@@ -298,7 +299,9 @@ int ObPartitionBalance::add_new_pg_to_bg_map_(
           if (OB_ISNULL(ls_part_desc = reinterpret_cast<ObLSPartGroupDesc*>(allocator_.alloc(sizeof(ObLSPartGroupDesc))))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("alloc mem fail", KR(ret), K(ls_id), K(bg));
-          } else if (FALSE_IT(new(ls_part_desc) ObLSPartGroupDesc(ls_desc_array_.at(i)->get_ls_id(), allocator_))) {
+          } else if (FALSE_IT(new(ls_part_desc) ObLSPartGroupDesc(allocator_))) {
+          } else if (OB_FAIL(ls_part_desc->init(ls_desc_array_.at(i)->get_ls_id(), ls_desc_array_.count()))) {
+            LOG_WARN("failed to init ls_part_desc", KR(ret), K(ls_part_desc));
           } else if (OB_FAIL(ls_part_desc_arr->push_back(ls_part_desc))) {
             LOG_WARN("push_back fail", KR(ret), K(ls_id), K(bg));
           }
@@ -310,7 +313,7 @@ int ObPartitionBalance::add_new_pg_to_bg_map_(
     bool find_ls = false;
     for (int64_t idx = 0; OB_SUCC(ret) && idx < ls_part_desc_arr->count(); idx++) {
       if (ls_part_desc_arr->at(idx)->get_ls_id() == ls_id) {
-        if (OB_FAIL(ls_part_desc_arr->at(idx)->add_new_part_group(part_group))) {
+        if (OB_FAIL(ls_part_desc_arr->at(idx)->add_new_part_group(part_group_uid, part_group))) {
           LOG_WARN("add_new_part_group failed", KR(ret), K(ls_id), K(idx), KPC(ls_part_desc_arr), K(part_group));
         }
         find_ls = true;
@@ -335,13 +338,13 @@ int ObPartitionBalance::process_balance_partition_inner_()
     ObArray<ObLSPartGroupDesc*> &ls_part_desc_arr = iter->second;
     int64_t ls_cnt = ls_part_desc_arr.count();
     for (int64_t ls_idx = 0; ls_idx < ls_cnt; ls_idx++) {
-      part_group_sum += ls_part_desc_arr.at(ls_idx)->get_part_groups().count();
+      part_group_sum += ls_part_desc_arr.at(ls_idx)->get_part_group_count();
     }
     while (OB_SUCC(ret)) {
       std::sort(ls_part_desc_arr.begin(), ls_part_desc_arr.end(), [] (ObLSPartGroupDesc* left, ObLSPartGroupDesc* right) {
-        if (left->get_part_groups().count() < right->get_part_groups().count()) {
+        if (left->get_part_group_count() < right->get_part_group_count()) {
           return true;
-        } else if (left->get_part_groups().count() == right->get_part_groups().count()) {
+        } else if (left->get_part_group_count() == right->get_part_group_count()) {
           if (left->get_ls_id() > right->get_ls_id()) {
             return true;
           }
@@ -351,7 +354,7 @@ int ObPartitionBalance::process_balance_partition_inner_()
       ObLSPartGroupDesc *ls_max = ls_part_desc_arr.at(ls_cnt - 1);
       ObLSPartGroupDesc *ls_min = ls_part_desc_arr.at(0);
       //If difference in number of partition groups between LS does not exceed 1, this balance group is balanced
-      if (ls_part_desc_arr.at(ls_cnt - 1)->get_part_groups().count() - ls_part_desc_arr.at(0)->get_part_groups().count() <= 1) {
+      if (ls_part_desc_arr.at(ls_cnt - 1)->get_part_group_count() - ls_part_desc_arr.at(0)->get_part_group_count() <= 1) {
         // balance group has done
         break;
       }
@@ -374,7 +377,7 @@ int ObPartitionBalance::process_balance_partition_inner_()
       int64_t ls_less_dest = 0;
       for (int64_t ls_idx = ls_part_desc_arr.count() - 1; ls_idx >= 0; ls_idx--) {
         int64_t part_dest = ls_idx < (ls_cnt - (part_group_sum % ls_cnt)) ? part_group_sum / ls_cnt : part_group_sum / ls_cnt + 1;;
-        if (ls_part_desc_arr.at(ls_idx)->get_part_groups().count() > part_dest) {
+        if (ls_part_desc_arr.at(ls_idx)->get_part_group_count() > part_dest) {
           ls_more = ls_part_desc_arr.at(ls_idx);
           ls_more_dest = part_dest;
           break;
@@ -382,7 +385,7 @@ int ObPartitionBalance::process_balance_partition_inner_()
       }
       for (int64_t ls_idx = 0; ls_idx < ls_part_desc_arr.count(); ls_idx++) {
         int64_t part_dest = ls_idx < (ls_cnt - (part_group_sum % ls_cnt)) ? part_group_sum / ls_cnt : part_group_sum / ls_cnt + 1;;
-        if (ls_part_desc_arr.at(ls_idx)->get_part_groups().count() < part_dest) {
+        if (ls_part_desc_arr.at(ls_idx)->get_part_group_count() < part_dest) {
           ls_less = ls_part_desc_arr.at(ls_idx);
           ls_less_dest = part_dest;
           break;
@@ -393,14 +396,21 @@ int ObPartitionBalance::process_balance_partition_inner_()
         LOG_WARN("not found dest ls", KR(ret));
         break;
       }
-      int64_t transfer_cnt = MIN(ls_more->get_part_groups().count() - ls_more_dest, ls_less_dest - ls_less->get_part_groups().count());
+      int64_t transfer_cnt = MIN(ls_more->get_part_group_count() - ls_more_dest, ls_less_dest - ls_less->get_part_group_count());
+      int64_t bucket_idx = 0;
+      ObTransferPartGroup *part_group = NULL;
+      if (0 == ls_less->get_part_group_count()) {
+        if (OB_FAIL(ls_more->get_bucket_closest_to_empty(bucket_idx))) {
+          LOG_WARN("failed to get the bucket closest to empty", KR(ret), KPC(ls_more));
+        }
+      } else if (OB_FAIL(ls_less->get_fullest_bucket(bucket_idx))) {
+        LOG_WARN("failed to get the fullest bucket", KR(ret), KPC(ls_less));
+      }
       for (int64_t i = 0; OB_SUCC(ret) && i < transfer_cnt; i++) {
-        if (OB_FAIL(add_transfer_task_(ls_more->get_ls_id(), ls_less->get_ls_id(), ls_more->get_part_groups().at(ls_more->get_part_groups().count() - 1)))) {
+        if (OB_FAIL(ls_more->transfer_out(bucket_idx, *ls_less, part_group))) {
+          LOG_WARN("failed to transfer partition from ls_more to ls_less", KR(ret), KPC(ls_more), KPC(ls_less));
+        } else if (OB_FAIL(add_transfer_task_(ls_more->get_ls_id(), ls_less->get_ls_id(), part_group))) {
           LOG_WARN("add_transfer_task_ fail", KR(ret), K(ls_more->get_ls_id()), K(ls_less->get_ls_id()));
-        } else if (OB_FAIL(ls_less->get_part_groups().push_back(ls_more->get_part_groups().at(ls_more->get_part_groups().count() - 1)))) {
-          LOG_WARN("push_back fail", KR(ret));
-        } else if (OB_FAIL(ls_more->get_part_groups().remove(ls_more->get_part_groups().count() - 1))) {
-          LOG_WARN("parts remove", KR(ret));
         }
       }
     }
@@ -543,13 +553,20 @@ int ObPartitionBalance::process_balance_partition_extend_()
           LOG_WARN("not found ls", KR(ret));
           break;
         }
-        if (ls_more->get_part_groups().count() > ls_less->get_part_groups().count()) {
-          if (OB_FAIL(add_transfer_task_(ls_more->get_ls_id(), ls_less->get_ls_id(), ls_more->get_part_groups().at(ls_more->get_part_groups().count() - 1)))) {
+        if (ls_more->get_part_group_count() > ls_less->get_part_group_count()) {
+          int64_t bucket_idx = 0;
+          ObTransferPartGroup *part_group = NULL;
+          if (0 == ls_less->get_part_group_count()) {
+            if (OB_FAIL(ls_more->get_bucket_closest_to_empty(bucket_idx))) {
+              LOG_WARN("failed to get the bucket closest to empty", KR(ret), KPC(ls_more));
+            }
+          } else if (OB_FAIL(ls_less->get_fullest_bucket(bucket_idx))) {
+            LOG_WARN("failed to get the fullest bucket", KR(ret), KPC(ls_less));
+          }
+          if (FAILEDx(ls_more->transfer_out(bucket_idx, *ls_less, part_group))) {
+            LOG_WARN("failed to transfer partition from ls_more to ls_less", KR(ret), KPC(ls_more), KPC(ls_less));
+          } else if (OB_FAIL(add_transfer_task_(ls_more->get_ls_id(), ls_less->get_ls_id(), part_group))) {
             LOG_WARN("add_transfer_task_ fail", KR(ret), K(ls_more->get_ls_id()), K(ls_less->get_ls_id()));
-          } else if (OB_FAIL(ls_less->get_part_groups().push_back(ls_more->get_part_groups().at(ls_more->get_part_groups().count() - 1)))) {
-            LOG_WARN("push_back fail", KR(ret));
-          } else if (OB_FAIL(ls_more->get_part_groups().remove(ls_more->get_part_groups().count() - 1))) {
-            LOG_WARN("parts remove", KR(ret));
           }
           break;
         }
@@ -645,32 +662,34 @@ int ObPartitionBalance::try_swap_part_group_(ObLSDesc &src_ls, ObLSDesc &dest_ls
       LOG_WARN("not found ls", KR(ret), K(ls_more), K(ls_less));
       break;
     }
-    if (ls_more->get_part_groups().count() == 0 || ls_less->get_part_groups().count() == 0) {
+    if (ls_more->get_part_group_count() == 0 || ls_less->get_part_group_count() == 0) {
       continue;
     }
-    std::sort(ls_more->get_part_groups().begin(), ls_more->get_part_groups().end(), [] (ObTransferPartGroup *l, ObTransferPartGroup *r) {
-      return l->get_data_size() < r->get_data_size();
-    });
-    std::sort(ls_less->get_part_groups().begin(), ls_less->get_part_groups().end(), [] (ObTransferPartGroup *l, ObTransferPartGroup *r) {
-      return l->get_data_size() < r->get_data_size();
-    });
-
-    ObTransferPartGroup *src_part_group = ls_more->get_part_groups().at(ls_more->get_part_groups().count() -1);
-    ObTransferPartGroup *dest_part_group = ls_less->get_part_groups().at(0);
-    int64_t swap_size = src_part_group->get_data_size() - dest_part_group->get_data_size();
-    if (swap_size >= part_group_min_size && src_ls.get_data_size() - dest_ls.get_data_size() > swap_size) {
-      LOG_INFO("[PART_BALANCE] swap_partition", K(*src_part_group), K(*dest_part_group), K(src_ls), K(dest_ls), K(swap_size), K(part_group_min_size));
-      if (OB_FAIL(add_transfer_task_(ls_more->get_ls_id(), ls_less->get_ls_id(), src_part_group))) {
+    ObTransferPartGroup *largest_part_group = NULL;
+    ObTransferPartGroup *smallest_part_group = NULL;
+    int64_t largest_bucket_idx = 0;
+    int64_t smallest_bucket_idx = 0;
+    int64_t largest_pg_idx = 0;
+    int64_t smallest_pg_idx = 0;
+    int64_t swap_size = 0;
+    if (OB_FAIL(ls_more->get_largest_part_group(largest_bucket_idx, largest_pg_idx, largest_part_group))) {
+      LOG_WARN("failed to get the largest part group", KR(ret), KPC(ls_more));
+    } else if (OB_FAIL(ls_less->get_smallest_part_group(smallest_bucket_idx, smallest_pg_idx, smallest_part_group))) {
+      LOG_WARN("failed to get the largest part group", KR(ret), KPC(ls_more));
+    } else if (FALSE_IT(swap_size = largest_part_group->get_data_size() - smallest_part_group->get_data_size())) { // empty
+    } else if (swap_size >= part_group_min_size && src_ls.get_data_size() - dest_ls.get_data_size() > swap_size) {
+      LOG_INFO("[PART_BALANCE] swap_partition", K(*largest_part_group), K(*smallest_part_group), K(src_ls), K(dest_ls), K(swap_size), K(part_group_min_size));
+      if (OB_FAIL(add_transfer_task_(ls_more->get_ls_id(), ls_less->get_ls_id(), largest_part_group))) {
         LOG_WARN("add_transfer_task_ fail", KR(ret), K(ls_more->get_ls_id()), K(ls_less->get_ls_id()));
-      } else if (OB_FAIL(ls_less->get_part_groups().push_back(src_part_group))) {
-        LOG_WARN("push_back fail", KR(ret), K(ls_less));
-      } else if (OB_FAIL(ls_more->get_part_groups().remove(ls_more->get_part_groups().count() - 1))) {
-        LOG_WARN("parts remove", KR(ret), K(ls_more));
-      } else if (OB_FAIL(add_transfer_task_(ls_less->get_ls_id(), ls_more->get_ls_id(), ls_less->get_part_groups().at(0)))) {
+      } else if (OB_FAIL(ls_less->add_part_group(largest_bucket_idx, largest_part_group))) {
+        LOG_WARN("push_back fail", KR(ret), K(ls_less), K(largest_bucket_idx), K(largest_part_group));
+      } else if (OB_FAIL(ls_more->remove_part_group(largest_bucket_idx, largest_pg_idx))) {
+        LOG_WARN("parts remove", KR(ret), K(ls_more), K(largest_bucket_idx), K(largest_pg_idx));
+      } else if (OB_FAIL(add_transfer_task_(ls_less->get_ls_id(), ls_more->get_ls_id(), smallest_part_group))) {
         LOG_WARN("add_transfer_task_ fail", KR(ret), K(ls_more->get_ls_id()), K(ls_less->get_ls_id()));
-      } else if (OB_FAIL(ls_more->get_part_groups().push_back(ls_less->get_part_groups().at(0)))) {
+      } else if (OB_FAIL(ls_more->add_part_group(smallest_bucket_idx, smallest_part_group))) {
         LOG_WARN("push_back fail", KR(ret), K(ls_more));
-      } else if (OB_FAIL(ls_less->get_part_groups().remove(0))) {
+      } else if (OB_FAIL(ls_less->remove_part_group(smallest_bucket_idx, smallest_pg_idx))) {
         LOG_WARN("parts remove", KR(ret), K(ls_less));
       } else {
         swap_cnt++;
@@ -736,6 +755,7 @@ int ObPartitionBalance::generate_balance_job_from_logical_task_()
       }                                                                       \
     }                                                                         \
   } while (0)
+
 int ObPartitionBalance::transfer_logical_task_to_balance_task(
     const uint64_t tenant_id,
     const ObBalanceJobID &balance_job_id,
@@ -825,7 +845,7 @@ int ObPartitionBalance::save_balance_group_stat_()
           if (OB_FAIL(bg_ls_stat.build(tenant_id_,
                                        iter->first.id(),
                                        iter->second.at(i)->get_ls_id(),
-                                       iter->second.at(i)->get_part_groups().count(),
+                                       iter->second.at(i)->get_part_group_count(),
                                        iter->first.name()))) {
             LOG_WARN("fail to build bg ls stat", KR(ret), K(iter->first), KPC(iter->second.at(i)));
           } else if (OB_FAIL(bg_ls_stat_array.push_back(bg_ls_stat))) {
@@ -898,20 +918,277 @@ int ObPartitionHelper::get_sub_part_info(const schema::ObSimpleTableSchemaV2 &ta
   return ret;
 }
 
-int ObPartitionBalance::ObLSPartGroupDesc::add_new_part_group(ObTransferPartGroup *&part_group)
+int ObPartitionBalance::ObLSPartGroupDesc::init(const ObLSID &ls_id, int64_t ls_num)
 {
   int ret = OB_SUCCESS;
-  part_group = NULL;
+  if (OB_UNLIKELY(inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", KR(ret), K_(inited));
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || ls_num <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ls_id or ls_num", KR(ret), K(ls_id), K(ls_num));
+  } else {
+    ls_id_ = ls_id;
+    ls_num_ = ls_num;
+    part_group_cnt_ = 0;
+    part_group_buckets_.reset();
+    for (int64_t i = 0; OB_SUCC(ret) && i < ls_num_; i++) {
+      ObArray<ObTransferPartGroup *> part_group_bucket(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(alloc_, "PartGroupArray"));
+      if (OB_FAIL(part_group_buckets_.push_back(part_group_bucket))) {
+        LOG_WARN("failed to push back part group bucket", KR(ret), K_(part_group_buckets), K(part_group_bucket));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      inited_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObPartitionBalance::ObLSPartGroupDesc::add_new_part_group(const uint64_t part_group_uid, ObTransferPartGroup *&part_group)
+{
+  int ret = OB_SUCCESS;
   const int64_t part_group_size = sizeof(ObTransferPartGroup);
-  void *buf = alloc_.alloc(part_group_size);
-  if (OB_ISNULL(buf)) {
+  void *buf = NULL;
+  int64_t bucket_idx = 0;
+  part_group = NULL;
+  
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(inited));
+  } else if (FALSE_IT(bucket_idx = part_group_uid % ls_num_)) { // empty
+  } else if (OB_UNLIKELY(bucket_idx < 0 || bucket_idx >= part_group_buckets_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid bucket_idx", KR(ret), K_(part_group_buckets), K(bucket_idx));
+  } else if (OB_ISNULL(buf = alloc_.alloc(part_group_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory for partition group fail", KR(ret), K(buf), K(part_group_size));
   } else if (OB_ISNULL(part_group = new(buf) ObTransferPartGroup(alloc_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("construct ObTransferPartGroup fail", KR(ret), K(buf), K(part_group_size));
-  } else if (OB_FAIL(part_groups_.push_back(part_group))) {
-    LOG_WARN("push back new partition group fail", KR(ret), K(part_group), K(part_groups_));
+  } else if (OB_FAIL(part_group_buckets_.at(bucket_idx).push_back(part_group))) {
+    LOG_WARN("push back new partition group fail", KR(ret), K(part_group), K(bucket_idx));
+  } else {
+    part_group_cnt_++;
+  }
+  return ret;
+}
+
+int ObPartitionBalance::ObLSPartGroupDesc::get_largest_part_group(int64_t &bucket_idx, int64_t &pg_idx, ObTransferPartGroup *&part_group) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(inited));
+  } else if (OB_UNLIKELY(0 == part_group_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part_group_cnt is 0", KR(ret), K_(part_group_cnt));
+  } else {
+    int64_t largest_pg_bucket_idx = -1;
+    int64_t largest_pg_idx = -1;
+    int64_t largest_pg_size = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_group_buckets_.count(); i++) {
+      const ObArray<ObTransferPartGroup*> &part_groups = part_group_buckets_.at(i);
+      for (int64_t j = 0; OB_SUCC(ret) && j < part_groups.count(); j++) {
+        ObTransferPartGroup *pg = NULL;
+        if (OB_ISNULL(pg = part_groups.at(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("part group is null", KR(ret), K(pg));
+        } else if (largest_pg_bucket_idx == -1) {
+          largest_pg_bucket_idx = i;
+          largest_pg_idx = j;
+          largest_pg_size = pg->get_data_size();
+        } else if (pg->get_data_size() > largest_pg_size) {
+          largest_pg_bucket_idx = i;
+          largest_pg_idx = j;
+          largest_pg_bucket_idx = pg->get_data_size();
+        }
+      }
+    }
+    if (FAILEDx(-1 == largest_pg_bucket_idx)) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("failed to get the largest part group", KR(ret));
+    } else {
+      bucket_idx = largest_pg_bucket_idx;
+      pg_idx = largest_pg_idx;
+      part_group = part_group_buckets_.at(bucket_idx).at(pg_idx);
+    }
+  }
+  return ret;
+}
+
+int ObPartitionBalance::ObLSPartGroupDesc::get_smallest_part_group(int64_t &bucket_idx, int64_t &pg_idx, ObTransferPartGroup *&part_group) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(inited));
+  } else {
+    int64_t smallest_pg_bucket_idx = -1;
+    int64_t smallest_pg_idx = -1;
+    int64_t smallest_pg_size = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_group_buckets_.count(); i++) {
+      const ObArray<ObTransferPartGroup*> &part_groups = part_group_buckets_.at(i);
+      for (int64_t j = 0; OB_SUCC(ret) && j < part_groups.count(); j++) {
+        ObTransferPartGroup *pg = NULL;
+        if (OB_ISNULL(pg = part_groups.at(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("part group is null", KR(ret), K(pg));
+        } else if (smallest_pg_bucket_idx == -1) {
+          smallest_pg_bucket_idx = i;
+          smallest_pg_idx = j;
+          smallest_pg_size = pg->get_data_size();
+        } else if (pg->get_data_size() < smallest_pg_size) {
+          smallest_pg_bucket_idx = i;
+          smallest_pg_idx = j;
+          smallest_pg_bucket_idx = pg->get_data_size();
+        }
+      }
+    }
+    if (FAILEDx(-1 == smallest_pg_bucket_idx)) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("failed to get the smallest part group", KR(ret));
+    } else {
+      bucket_idx = smallest_pg_bucket_idx;
+      pg_idx = smallest_pg_idx;
+      part_group = part_group_buckets_.at(bucket_idx).at(pg_idx);
+    }
+  }
+  return ret;
+}
+
+int ObPartitionBalance::ObLSPartGroupDesc::get_fullest_bucket(int64_t &bucket_idx) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(inited));
+  } else {
+    int64_t fullest_bucket_size = -1;
+    int64_t fullest_bucket_idx = -1;
+    for (int64_t i = 0; i < part_group_buckets_.size(); i++) {
+      const ObArray<ObTransferPartGroup*> &part_groups = part_group_buckets_.at(i);
+      if (part_groups.size() > fullest_bucket_size) {
+        fullest_bucket_idx = i;
+        fullest_bucket_size = part_groups.size();
+      }
+    }
+    if (-1 == fullest_bucket_idx) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("failed to get the fullest bucket", KR(ret), K_(part_group_buckets));
+    } else {
+      bucket_idx = fullest_bucket_idx;
+    }
+  }
+  return ret;
+}
+
+int ObPartitionBalance::ObLSPartGroupDesc::get_bucket_closest_to_empty(int64_t &bucket_idx) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(inited));
+  } else {
+    int64_t closest_to_empty_bucket_size = INT64_MAX;
+    int64_t closest_to_empty_bucket_idx = -1;
+    for (int64_t i = 0; i < part_group_buckets_.size(); i++) {
+      const ObArray<ObTransferPartGroup*> &part_groups = part_group_buckets_.at(i);
+      if (!part_groups.empty() && part_groups.size() < closest_to_empty_bucket_size) {
+        closest_to_empty_bucket_idx = i;
+        closest_to_empty_bucket_size = part_groups.size();
+      }
+    }
+    if (-1 == closest_to_empty_bucket_idx) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("failed to get a bucket closest to empty", KR(ret), K_(part_group_buckets));
+    } else {
+      bucket_idx = closest_to_empty_bucket_idx;
+    }
+  }
+  return ret;
+}
+
+int ObPartitionBalance::ObLSPartGroupDesc::transfer_out(int64_t bucket_idx, ObLSPartGroupDesc &dest_ls_pg, ObTransferPartGroup *&part_group)
+{
+  int ret = OB_SUCCESS;
+  part_group = NULL;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(inited));
+  } else if (OB_UNLIKELY(bucket_idx < 0 || bucket_idx >= part_group_buckets_.count()
+                        || !dest_ls_pg.is_valid()
+                        || part_group_buckets_.count() != dest_ls_pg.part_group_buckets_.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("bucket_idx or dest_ls_pg is invalid", KR(ret), K(bucket_idx), K(dest_ls_pg));
+  } else if (OB_UNLIKELY(part_group_cnt_ <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part_group_cnt should be greater than 0", KR(ret), K_(part_group_cnt));
+  } else {
+    if (!part_group_buckets_.at(bucket_idx).empty() && OB_FAIL(part_group_buckets_.at(bucket_idx).pop_back(part_group))) {
+        LOG_WARN("failed to pop back part group", KR(ret), K(part_group_buckets_.at(bucket_idx)));
+    }
+    for (int64_t i = bucket_idx + 2; OB_SUCC(ret) && NULL == part_group && i < bucket_idx + 2 + part_group_buckets_.count(); i++) {
+      ObArray<ObTransferPartGroup*> &part_groups = part_group_buckets_.at(i % part_group_buckets_.count());
+      if (!part_groups.empty()) {
+        if (OB_FAIL(part_groups.pop_back(part_group))) {
+          LOG_WARN("failed to pop back part group", KR(ret), K(part_groups), K(part_group));
+        } else {
+          bucket_idx = i % part_group_buckets_.count();
+        }
+        break;
+      }
+    }
+    if (OB_FAIL(ret)) { // empty
+    } else if (OB_ISNULL(part_group)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("part group is null", KR(ret), K(part_group));
+    } else if (OB_FAIL(dest_ls_pg.part_group_buckets_.at(bucket_idx).push_back(part_group))) {
+      LOG_WARN("failed to push back part group", KR(ret), K(part_group));
+    } else {
+      part_group_cnt_--;
+      dest_ls_pg.part_group_cnt_++;
+    }
+  }
+  return ret;
+}
+
+int ObPartitionBalance::ObLSPartGroupDesc::remove_part_group(const int64_t bucket_idx, const int64_t pg_idx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not init", KR(ret), K_(inited));
+  } else if (OB_UNLIKELY(bucket_idx < 0 || bucket_idx >= part_group_buckets_.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("bucket_idx is invalid", KR(ret), K(bucket_idx));
+  } else if (OB_UNLIKELY(pg_idx < 0 || pg_idx >= part_group_buckets_.at(bucket_idx).count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("pg_idx is invalid", KR(ret), K(pg_idx));
+  } else if (OB_FAIL(part_group_buckets_.at(bucket_idx).remove(pg_idx))) {
+    LOG_WARN("failed to remove part group", KR(ret), K(bucket_idx), K(pg_idx));
+  } else {
+    part_group_cnt_--;
+  }
+  return ret;
+}
+
+int ObPartitionBalance::ObLSPartGroupDesc::add_part_group(const int64_t bucket_idx, ObTransferPartGroup *const pg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not init", KR(ret), K_(inited));
+  } else if (OB_UNLIKELY(bucket_idx < 0 || bucket_idx >= part_group_buckets_.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("bucket_idx is invalid", KR(ret), K(bucket_idx));
+  } else if (OB_ISNULL(pg)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("pg is null", KR(ret), K(pg));
+  } else if (OB_FAIL(part_group_buckets_.at(bucket_idx).push_back(pg))) {
+    LOG_WARN("failed to push back", KR(ret), K(bucket_idx));
+  } else {
+    part_group_cnt_++;
   }
   return ret;
 }

@@ -34,10 +34,15 @@ namespace rootserver
 class ObTenantLSBalanceGroupInfo final : public ObAllBalanceGroupBuilder::NewPartitionCallback
 {
 public:
-  ObTenantLSBalanceGroupInfo() : inited_(false), tenant_id_(OB_INVALID_TENANT_ID), ls_bg_map_() {}
+  ObTenantLSBalanceGroupInfo() :
+      inited_(false),
+      tenant_id_(OB_INVALID_TENANT_ID),
+      alloc_("TenantLSBGInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      ls_bg_map_(),
+      target_ls_num_(0) {}
   ~ObTenantLSBalanceGroupInfo() { destroy(); }
 
-  int init(const uint64_t tenant_id);
+  int init(const uint64_t tenant_id, int64_t target_ls_num);
   void destroy();
 
   // build All LS Balance Group Info
@@ -66,8 +71,8 @@ public:
 
   TO_STRING_KV(K_(inited), K_(tenant_id), "valid_ls_count", ls_bg_map_.size());
 
-private:
-  int create_new_ls_bg_info_(const share::ObLSID ls_id,
+public:
+  int create_new_ls_bg_info(const share::ObLSID ls_id,
       ObLSBalanceGroupInfo *&ls_bg_info);
 
 private:
@@ -80,6 +85,7 @@ private:
   // map for all balance groups on tenant every LS
   // If LS is empty, it does not exist in this map
   common::hash::ObHashMap<share::ObLSID, ObLSBalanceGroupInfo *> ls_bg_map_;
+  int64_t target_ls_num_;
 };
 
 }
