@@ -34,10 +34,16 @@ namespace rootserver
 class ObTenantLSBalanceGroupInfo final : public ObAllBalanceGroupBuilder::NewPartitionCallback
 {
 public:
-  ObTenantLSBalanceGroupInfo() : inited_(false), tenant_id_(OB_INVALID_TENANT_ID), ls_bg_map_() {}
+  ObTenantLSBalanceGroupInfo() :
+      inited_(false),
+      tenant_id_(OB_INVALID_TENANT_ID),
+      alloc_("TenantLSBGInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      ls_bg_map_(),
+      ls_num_(0)
+  {}
   ~ObTenantLSBalanceGroupInfo() { destroy(); }
 
-  int init(const uint64_t tenant_id);
+  int init(const uint64_t tenant_id, int64_t ls_num);
   void destroy();
 
   // build All LS Balance Group Info
@@ -55,19 +61,19 @@ public:
   // Handle new partition when building balance group
   virtual int on_new_partition(
       const ObBalanceGroup &bg,
+      const common::ObObjectID bg_unit_id,
       const common::ObObjectID table_id,
       const common::ObObjectID part_object_id,
-      const common::ObTabletID tablet_id,
       const share::ObLSID &src_ls_id,
       const share::ObLSID &dest_ls_id,
       const int64_t tablet_size,
       const bool in_new_partition_group,
       const uint64_t part_group_uid);
 
-  TO_STRING_KV(K_(inited), K_(tenant_id), "valid_ls_count", ls_bg_map_.size());
+  TO_STRING_KV(K_(inited), K_(tenant_id), "valid_ls_count", ls_bg_map_.size(), K_(ls_num));
 
-private:
-  int create_new_ls_bg_info_(const share::ObLSID ls_id,
+public:
+  int get_or_create(const share::ObLSID ls_id,
       ObLSBalanceGroupInfo *&ls_bg_info);
 
 private:
@@ -80,6 +86,7 @@ private:
   // map for all balance groups on tenant every LS
   // If LS is empty, it does not exist in this map
   common::hash::ObHashMap<share::ObLSID, ObLSBalanceGroupInfo *> ls_bg_map_;
+  int64_t ls_num_;
 };
 
 }
