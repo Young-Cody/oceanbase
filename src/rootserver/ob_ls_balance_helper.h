@@ -98,7 +98,8 @@ struct ObSplitLSParam
 {
 public:
   ObSplitLSParam(const share::ObLSStatusInfo *ls_info, const double current_factor) :
-                    info_(ls_info), current_factor_(current_factor){}
+      info_(ls_info),
+      current_factor_(current_factor) {}
   ObSplitLSParam() : info_(NULL), current_factor_(OB_FLOAT_EPSINON) {}
   bool is_valid() const
   {
@@ -158,7 +159,8 @@ public:
   int init(const uint64_t tenant_id, const share::ObLSStatusInfoArray &status_array,
            const ObIArray<share::ObSimpleUnitGroup> &unit_group_array,
            const int64_t primary_zone_num,
-           ObMySQLProxy *sql_proxy);
+           ObMySQLProxy *sql_proxy,
+           const ObPartitionScatterMode &scatter_mode = SCATTER_ROUND_ROBIN);
   //check need ls balance
   int check_need_ls_balance(bool &need_balance);
   //generate ls balance job and task
@@ -192,12 +194,25 @@ public:
                                   ObIArray<ObSplitLSParamArray> &dest_array);
   int generate_balance_task_for_expand_(const ObSplitLSParamArray &dest_split_param,
                                         const uint64_t ls_group_id);
+  // target_ls_id: the ls which the splitted part groups will be located eventually
+  // 1. for ls expand:
+  //    param[out] target_ls_id: the first splitted dest_ls_id, other splitted dest_ls_id
+  //                             is merged into target_ls_id
+  //    for example: when ls_num 2 -> 3, generate ls_split(1001, 1003), ls_split(1002, 1004),
+  //                 ls_merge(1004, 1003). target_ls_id will be 1003
+  // 2. for ls shrink:
+  //    param[in] target_ls_id: the normal ls which the splitted part groups will be located eventually
+  //    for example: when ls_num 3 -> 2, generate ls_split(1003, 1004)
+  //                 target_ls_id is 1001
   int generate_ls_split_task_(const ObSplitLSParamArray &dest_split_param,
-                                  int64_t &task_begin_index);
+                              share::ObLSID &target_ls_id,
+                              int64_t &task_begin_index);
   int prepare_ls_partition_info_();
   int add_ls_part_info(const share::ObLSID &ls_id, const share::ObTransferPartInfo &part_info,
                         const ObBalanceGroupID &bg_id);
-  int construct_ls_part_info_(const ObSplitLSParam &src_ls, share::ObTransferPartList &part_list);
+  int construct_ls_part_info_(const ObSplitLSParam &src_ls,
+                              const share::ObLSID &dest_ls_id,
+                              share::ObTransferPartList &part_list);
   int generate_ls_alter_task_(const share::ObLSStatusInfo &ls_status_info, ObUnitGroupBalanceInfo &dest_unit_group);
   int generate_task_for_shrink_(const ObSplitLSParamArray &src_split_param, const share::ObLSStatusInfo &ls_status_info);
   int generate_transfer_task_(const ObSplitLSParam &param, const share::ObLSStatusInfo &ls_status_info);
@@ -215,6 +230,7 @@ public:
   share::ObBalanceJob job_;
   ObArray<share::ObBalanceTask> task_array_;
   ObTenantLSBalanceGroupInfo tenant_ls_bg_info_;
+  ObPartitionScatterMode scatter_mode_;
 };
 
 }
