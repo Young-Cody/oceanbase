@@ -80,7 +80,8 @@ public:
     // @param [in]  bg                        balance group
     // @param [in]  bg_unit_id                balance group unit id
     // @param [in]  table_id                  table id of partition
-    // @param [in]  part_object_id            partition object id: part id for one-level part table, subpart id for two-level part table
+    // @param [in]  part_object_id            partition object id: part id for one-level part table,
+    //                                        subpart id for two-level part table
     // @param [in]  src_ls_id                 the LS that partition is current located
     // @param [in]  dest_ls_id                the LS that partition should be located
     // @param [in]  tablet_size               tablet data size

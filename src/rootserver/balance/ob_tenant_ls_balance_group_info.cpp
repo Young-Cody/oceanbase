@@ -43,7 +43,7 @@ int ObTenantLSBalanceGroupInfo::init(const uint64_t tenant_id, int64_t ls_num)
 
 void ObTenantLSBalanceGroupInfo::destroy()
 {
-  for (auto iter = ls_bg_map_.begin(); iter != ls_bg_map_.end(); iter++) {
+  FOREACH(iter, ls_bg_map_) {
     ObLSBalanceGroupInfo *ls_bg_info = iter->second;
     if (OB_NOT_NULL(ls_bg_info)) {
       ls_bg_info->~ObLSBalanceGroupInfo();
@@ -110,15 +110,29 @@ int ObTenantLSBalanceGroupInfo::on_new_partition(
   } else if (OB_ISNULL(ls_bg_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid ls balance group info", KR(ret), K(ls_bg_info), K(src_ls_id));
-  } else if (OB_FAIL(ls_bg_info->append_part_into_balance_group(bg.id(), bg_unit_id, part_group_uid, part_info, tablet_size))) {
+  } else if (OB_FAIL(ls_bg_info->append_part_into_balance_group(bg.id(), bg_unit_id,
+                    part_group_uid, part_info, tablet_size))) {
     LOG_WARN("append part into balance group for LS balance group info fail", KR(ret), K(bg),
         K(part_info), K(tablet_size), K(part_group_uid));
   }
   return ret;
 }
 
+int ObTenantLSBalanceGroupInfo::get(const share::ObLSID &ls_id,
+                                    ObLSBalanceGroupInfo *&ls_bg_info) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantLSBalanceGroupInfo not init", KR(ret), KR(inited_));
+  } else if (OB_FAIL(ls_bg_map_.get_refactored(ls_id, ls_bg_info))) {
+    LOG_WARN("get ls balance group info fail", KR(ret), K(ls_id));
+  }
+  return ret;
+}
+
 int ObTenantLSBalanceGroupInfo::get_or_create(const ObLSID ls_id,
-    ObLSBalanceGroupInfo *&ls_bg_info)
+                                              ObLSBalanceGroupInfo *&ls_bg_info)
 {
   int ret = OB_SUCCESS;
   void *buf = NULL;

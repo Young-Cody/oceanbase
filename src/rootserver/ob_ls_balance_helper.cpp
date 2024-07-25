@@ -369,7 +369,9 @@ int ObLSBalanceTaskHelper::generate_migrate_task_()
   return ret;
 }
 
-int ObLSBalanceTaskHelper::generate_ls_alter_task_(const ObLSStatusInfo &ls_status_info, ObUnitGroupBalanceInfo &dest_unit_group)
+int ObLSBalanceTaskHelper::generate_ls_alter_task_(
+    const ObLSStatusInfo &ls_status_info,
+    ObUnitGroupBalanceInfo &dest_unit_group)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -431,7 +433,8 @@ int ObLSBalanceTaskHelper::generate_expand_task_()
       }
     }
     if (FAILEDx(tenant_ls_bg_info_.init(tenant_id_, src_ls.count() + lack_count))) {
-      LOG_WARN("init tenant LS balance group info fail", KR(ret), K_(tenant_id), K(src_ls.count() + lack_count));
+      LOG_WARN("init tenant LS balance group info fail", KR(ret), K_(tenant_id),
+              K(src_ls.count() + lack_count));
       // build tenant all balance group info for ALL LS
     } else if (OB_FAIL(tenant_ls_bg_info_.build("LS_BALANCE", *sql_proxy_, *schema_service))) {
       LOG_WARN("build tenant all balance group info for all LS fail", KR(ret));
@@ -508,7 +511,8 @@ int ObLSBalanceTaskHelper::generate_shrink_task_()
         } else if (OB_FAIL(generate_task_for_shrink_(
                        dest_ls.at(dest_index++),
                        balance_info.get_normal_ls_array().at(j)))) {
-          LOG_WARN("failed to generate task for shrink", KR(ret), K(dest_index), K(dest_ls), K(j), K(balance_info));
+          LOG_WARN("failed to generate task for shrink", KR(ret), K(dest_index), K(dest_ls),
+                  K(j), K(balance_info));
         }
       }
     }
@@ -610,8 +614,10 @@ int ObLSBalanceTaskHelper::generate_transfer_task_(
   return ret;
 }
 
-int ObLSBalanceTaskHelper::construct_shrink_src_param_(const int64_t target_count, ObSplitLSParamArray &src_ls,
-      ObIArray<ObSplitLSParamArray> &dest_split_array)
+int ObLSBalanceTaskHelper::construct_shrink_src_param_(
+    const int64_t target_count,
+    ObSplitLSParamArray &src_ls,
+    ObIArray<ObSplitLSParamArray> &dest_split_array)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -660,8 +666,10 @@ int ObLSBalanceTaskHelper::construct_shrink_src_param_(const int64_t target_coun
   return ret;
 }
 
-int ObLSBalanceTaskHelper::construct_expand_dest_param_(const int64_t lack_ls_count, ObSplitLSParamArray &src_ls,
-      ObIArray<ObSplitLSParamArray> &dest_split_array)
+int ObLSBalanceTaskHelper::construct_expand_dest_param_(
+    const int64_t lack_ls_count,
+    ObSplitLSParamArray &src_ls,
+    ObIArray<ObSplitLSParamArray> &dest_split_array)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -746,7 +754,8 @@ int ObLSBalanceTaskHelper::generate_balance_task_for_expand_(
 }
 
 int ObLSBalanceTaskHelper::generate_ls_split_task_(const ObSplitLSParamArray &dest_split_param,
-    share::ObLSID &dest_ls_id, int64_t &task_begin_index)
+                                                  share::ObLSID &dest_ls_id,
+                                                  int64_t &task_begin_index)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -770,7 +779,8 @@ int ObLSBalanceTaskHelper::generate_ls_split_task_(const ObSplitLSParamArray &de
     if (OB_ISNULL(src_ls)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("src ls is null", KR(ret), K(i), K(dest_split_param));
-    } else if (OB_FAIL(ObLSServiceHelper::fetch_new_ls_id(sql_proxy_, tenant_id_, dest_ls_id_tmp))) {
+    } else if (OB_FAIL(ObLSServiceHelper::fetch_new_ls_id(sql_proxy_, tenant_id_,
+                                                          dest_ls_id_tmp))) {
       LOG_WARN("failed to fetch new ls id", KR(ret), K(tenant_id_));
     } else if (OB_FAIL(ObCommonIDUtils::gen_unique_id(tenant_id_, task_id))) {
       LOG_WARN("failed to gen unique id", KR(ret), K(tenant_id_));
@@ -790,7 +800,8 @@ int ObLSBalanceTaskHelper::generate_ls_split_task_(const ObSplitLSParamArray &de
   return ret;
 }
 
-int ObLSBalanceTaskHelper::construct_ls_alter_task_(const share::ObLSID &ls_id, const uint64_t ls_group_id)
+int ObLSBalanceTaskHelper::construct_ls_alter_task_(const share::ObLSID &ls_id,
+                                                    const uint64_t ls_group_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -860,8 +871,10 @@ int ObLSBalanceTaskHelper::construct_ls_merge_task_(
   return ret;
 }
 
-int ObLSBalanceTaskHelper::construct_ls_part_info_(const ObSplitLSParam &src_ls,
-    const share::ObLSID &dest_ls_id, ObTransferPartList &part_list)
+int ObLSBalanceTaskHelper::construct_ls_part_info_(
+    const ObSplitLSParam &src_ls,
+    const share::ObLSID &dest_ls_id,
+    ObTransferPartList &part_list)
 {
   int ret = OB_SUCCESS;
   ObLSID src_ls_id = src_ls.get_ls_id();

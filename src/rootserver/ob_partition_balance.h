@@ -57,8 +57,12 @@ public:
     GEN_TRANSFER_TASK
   };
 
-  int init(uint64_t tenant_id, schema::ObMultiVersionSchemaService *schema_service, common::ObMySQLProxy *sql_proxy,
-      const int64_t primary_zone_num, const int64_t unit_group_num,
+  int init(
+      uint64_t tenant_id,
+      schema::ObMultiVersionSchemaService *schema_service,
+      common::ObMySQLProxy *sql_proxy,
+      const int64_t primary_zone_num,
+      const int64_t unit_group_num,
       TaskMode mode = GEN_BG_STAT);
   void destroy();
   int process();
@@ -75,7 +79,7 @@ public:
   // For ObAllBalanceGroupBuilder::NewPartitionCallback
   // handle new partition of every balance group
   int on_new_partition(
-      const ObBalanceGroup &bg,
+      const ObBalanceGroup &bg_in,
       const ObObjectID bg_unit_id,
       const ObObjectID table_id,
       const ObObjectID part_object_id,
@@ -88,7 +92,11 @@ public:
   class ObLSDesc
   {
   public:
-    ObLSDesc(ObLSID ls_id, uint64_t ls_group_id) : ls_id_(ls_id), ls_group_id_(ls_group_id), partgroup_cnt_(0), data_size_(0) {}
+    ObLSDesc(ObLSID ls_id, uint64_t ls_group_id) :
+        ls_id_(ls_id),
+        ls_group_id_(ls_group_id),
+        partgroup_cnt_(0),
+        data_size_(0) {}
     ~ObLSDesc() {
       ls_id_.reset();
       ls_group_id_ = OB_INVALID_ID;
@@ -151,11 +159,23 @@ private:
   int generate_balance_job_from_logical_task_();
 
   int prepare_ls_();
-  int add_part_to_bg_map_(const ObLSID &ls_id, const ObBalanceGroup &bg, const ObObjectID bg_unit_id,
-      const uint64_t part_group_uid, const ObTransferPartInfo &part_info, const int64_t tablet_size);
-  int add_transfer_task_(const ObLSID &src_ls_id, const ObLSID &dest_ls_id, ObTransferPartGroup *part_group, bool modify_ls_desc = true);
+  int add_part_to_bg_map_(
+      const ObLSID &ls_id,
+      ObBalanceGroup &bg,
+      const ObObjectID &bg_unit_id,
+      const uint64_t part_group_uid,
+      const ObTransferPartInfo &part_info,
+      const int64_t tablet_size);
+  int add_transfer_task_(
+      const ObLSID &src_ls_id,
+      const ObLSID &dest_ls_id,
+      ObTransferPartGroup *part_group,
+      bool modify_ls_desc = true);
   int update_ls_desc_(const ObLSID &ls_id, int64_t cnt, int64_t size);
-  int try_swap_part_group_(ObLSDesc &src_ls, ObLSDesc &dest_ls, int64_t part_group_min_size ,int64_t &swap_cnt);
+  int try_swap_part_group_(ObLSDesc &src_ls,
+                          ObLSDesc &dest_ls,
+                          int64_t part_group_min_size,
+                          int64_t &swap_cnt);
   int get_table_schemas_in_tablegroup_(int64_t tablegroup_id,
                                       ObArray<const schema::ObSimpleTableSchemaV2*> &table_schemas,
                                       int &max_part_level);

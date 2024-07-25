@@ -37,9 +37,9 @@ int ObTransferPartGroup::add_part(const ObTransferPartInfo &part, int64_t data_s
 ObBalanceGroupUnit::~ObBalanceGroupUnit()
 {
   inited_ = false;
-  for (int i = 0; i < part_group_buckets_.count(); i++) {
+  ARRAY_FOREACH_NORET(part_group_buckets_, i) {
     ObPartGroupBucket &bucket = part_group_buckets_.at(i);
-    for (int j = 0; j < bucket.count(); j++) {
+    ARRAY_FOREACH_NORET(bucket, j) {
       ObTransferPartGroup *part_group = bucket.at(j);
       if (OB_NOT_NULL(part_group)) {
         part_group->~ObTransferPartGroup();
@@ -68,7 +68,8 @@ int ObBalanceGroupUnit::init(const int64_t bucket_num)
   } else {
     part_group_cnt_ = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < bucket_num; i++) {
-      ObPartGroupBucket bucket(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(alloc_, "PartGroupBucket"));
+      ObPartGroupBucket bucket(OB_MALLOC_NORMAL_BLOCK_SIZE,
+                              ModulePageAllocator(alloc_, "PartGroupBucket"));
       if (OB_FAIL(part_group_buckets_.push_back(bucket))) {
         LOG_WARN("failed to push back bg_unit", KR(ret), K_(part_group_buckets), K(bucket));
       }
@@ -78,10 +79,10 @@ int ObBalanceGroupUnit::init(const int64_t bucket_num)
     }
   }
   return ret;
-
 }
 
-int ObBalanceGroupUnit::append_part_group(const uint64_t part_group_uid, ObTransferPartGroup *const part_group)
+int ObBalanceGroupUnit::append_part_group(const uint64_t part_group_uid,
+                                          ObTransferPartGroup *const part_group)
 {
   int ret = OB_SUCCESS;
   int64_t bucket_idx = OB_INVALID_INDEX;
@@ -92,23 +93,26 @@ int ObBalanceGroupUnit::append_part_group(const uint64_t part_group_uid, ObTrans
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(part_group_uid), K(part_group));
   } else if (FALSE_IT(bucket_idx = part_group_uid % part_group_buckets_.count())) {
-  } else if (OB_FAIL(append_part_group(bucket_idx, part_group))) {
+  } else if (OB_FAIL(append_part_group_into_bucket(bucket_idx, part_group))) {
     LOG_WARN("failed to append part group", KR(ret), K(bucket_idx), K(part_group));
   }
   return ret;
 }
 
-int ObBalanceGroupUnit::append_part_group(const int64_t bucket_idx, ObTransferPartGroup *const part_group)
+int ObBalanceGroupUnit::append_part_group_into_bucket(const int64_t bucket_idx,
+                                                      ObTransferPartGroup *const part_group)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(bucket_idx < 0 || bucket_idx >= part_group_buckets_.count())) {
+  } else if (OB_UNLIKELY(bucket_idx < 0 || bucket_idx >= part_group_buckets_.count()
+                        || NULL == part_group)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid bucket_idx", KR(ret), K(bucket_idx));
+    LOG_WARN("invalid bucket_idx", KR(ret), K(bucket_idx), K(part_group));
   } else if (OB_FAIL(part_group_buckets_.at(bucket_idx).push_back(part_group))) {
-    LOG_WARN("failed to push back part group", KR(ret), K(part_group_buckets_.at(bucket_idx)), K(part_group));
+    LOG_WARN("failed to push back part group", KR(ret), K(part_group_buckets_.at(bucket_idx)),
+            K(part_group));
   } else {
     part_group_cnt_++;
   }
@@ -128,7 +132,10 @@ int ObBalanceGroupUnit::remove_part_group(const int64_t bucket_idx, const int64_
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid pg_idx", KR(ret), K(pg_idx));
   } else if (OB_FAIL(part_group_buckets_.at(bucket_idx).remove(pg_idx))) {
-    LOG_WARN("failed to remove part group", KR(ret), K(part_group_buckets_.at(bucket_idx)), K(pg_idx));
+    LOG_WARN("failed to remove part group", KR(ret), K(part_group_buckets_.at(bucket_idx)),
+            K(pg_idx));
+  } else {
+    part_group_cnt_--;
   }
   return ret;
 }
@@ -160,7 +167,8 @@ int ObBalanceGroupUnit::transfer_out(ObBalanceGroupUnit &dst_unit, ObTransferPar
     LOG_WARN("failed to pop back part group", KR(ret), K(part_group_buckets_.at(bucket_idx)));
   } else if (OB_ISNULL(part_group)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid part group, is NULL, unexpected", KR(ret), K(part_group), K(part_group_buckets_));
+    LOG_WARN("invalid part group, is NULL, unexpected", KR(ret), K(part_group),
+            K(part_group_buckets_));
   } else if (OB_FAIL(dst_unit.part_group_buckets_.at(bucket_idx).push_back(part_group))) {
     LOG_WARN("failed to append part group to dst unit", KR(ret), K(bucket_idx), KPC(part_group));
   } else {
@@ -170,7 +178,9 @@ int ObBalanceGroupUnit::transfer_out(ObBalanceGroupUnit &dst_unit, ObTransferPar
   return ret;
 }
 
-int ObBalanceGroupUnit::get_largest_part_group(int64_t &bucket_idx, int64_t &pg_idx, ObTransferPartGroup *&part_group) const
+int ObBalanceGroupUnit::get_largest_part_group(int64_t &bucket_idx,
+                                              int64_t &pg_idx,
+                                              ObTransferPartGroup *&part_group) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -180,9 +190,9 @@ int ObBalanceGroupUnit::get_largest_part_group(int64_t &bucket_idx, int64_t &pg_
     int64_t largest_pg_size = 0;
     bucket_idx = OB_INVALID_INDEX;
     pg_idx = OB_INVALID_INDEX;
-    for (int64_t i = 0; OB_SUCC(ret) && i < part_group_buckets_.count(); i++) {
+    ARRAY_FOREACH(part_group_buckets_, i) {
       const ObPartGroupBucket &bucket = part_group_buckets_.at(i);
-      for (int64_t j = 0; OB_SUCC(ret) && j < bucket.count(); j++) {
+      ARRAY_FOREACH(bucket, j) {
         ObTransferPartGroup *pg = NULL;
         if (OB_ISNULL(pg = bucket.at(j))) {
           ret = OB_ERR_UNEXPECTED;
@@ -195,9 +205,9 @@ int ObBalanceGroupUnit::get_largest_part_group(int64_t &bucket_idx, int64_t &pg_
       }
     }
     if (OB_FAIL(ret)) { // empty
-    } else if (OB_UNLIKELY(OB_INVALID_INDEX == bucket_idx)) {
+    } else if (OB_UNLIKELY(OB_INVALID_INDEX == bucket_idx || OB_INVALID_INDEX == pg_idx)) {
       ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("failed to get the largest part group", KR(ret));
+      LOG_WARN("failed to get the largest part group", KR(ret), K(bucket_idx), K(pg_idx));
     } else {
       part_group = part_group_buckets_.at(bucket_idx).at(pg_idx);
     }
@@ -205,7 +215,9 @@ int ObBalanceGroupUnit::get_largest_part_group(int64_t &bucket_idx, int64_t &pg_
   return ret;
 }
 
-int ObBalanceGroupUnit::get_smallest_part_group(int64_t &bucket_idx, int64_t &pg_idx, ObTransferPartGroup *&part_group) const
+int ObBalanceGroupUnit::get_smallest_part_group(int64_t &bucket_idx,
+                                                int64_t &pg_idx,
+                                                ObTransferPartGroup *&part_group) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -215,9 +227,9 @@ int ObBalanceGroupUnit::get_smallest_part_group(int64_t &bucket_idx, int64_t &pg
     int64_t smallest_pg_size = 0;
     bucket_idx = OB_INVALID_INDEX;
     pg_idx = OB_INVALID_INDEX;
-    for (int64_t i = 0; OB_SUCC(ret) && i < part_group_buckets_.count(); i++) {
+    ARRAY_FOREACH(part_group_buckets_, i) {
       const ObPartGroupBucket &bucket = part_group_buckets_.at(i);
-      for (int64_t j = 0; OB_SUCC(ret) && j < bucket.count(); j++) {
+      ARRAY_FOREACH(bucket, j) {
         ObTransferPartGroup *pg = NULL;
         if (OB_ISNULL(pg = bucket.at(j))) {
           ret = OB_ERR_UNEXPECTED;
@@ -230,9 +242,9 @@ int ObBalanceGroupUnit::get_smallest_part_group(int64_t &bucket_idx, int64_t &pg
       }
     }
     if (OB_FAIL(ret)) { // empty
-    } else if (OB_UNLIKELY(OB_INVALID_INDEX == bucket_idx)) {
+    } else if (OB_UNLIKELY(OB_INVALID_INDEX == bucket_idx || OB_INVALID_INDEX == pg_idx)) {
       ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("failed to get the largest part group", KR(ret));
+      LOG_WARN("failed to get the smallest part group", KR(ret), K(bucket_idx), K(pg_idx));
     } else {
       part_group = part_group_buckets_.at(bucket_idx).at(pg_idx);
     }
@@ -240,23 +252,30 @@ int ObBalanceGroupUnit::get_smallest_part_group(int64_t &bucket_idx, int64_t &pg
   return ret;
 }
 
-int ObBalanceGroupUnit::get_transfer_out_bucket_(const ObBalanceGroupUnit &dst_unit, int64_t &bucket_idx)
+int ObBalanceGroupUnit::get_transfer_out_bucket_(const ObBalanceGroupUnit &dst_unit,
+                                                int64_t &bucket_idx) const
 {
   int ret = OB_SUCCESS;
   double ratio_max = -DBL_MAX;
   bucket_idx = OB_INVALID_INDEX;
-  for (int64_t i = 0; i < dst_unit.part_group_buckets_.count(); i++) {
+  ARRAY_FOREACH_NORET(part_group_buckets_, i) {
     const ObArray<ObTransferPartGroup*> &src_part_groups = part_group_buckets_.at(i);
     const ObArray<ObTransferPartGroup*> &dst_part_groups = dst_unit.part_group_buckets_.at(i);
     int64_t src_cnt = src_part_groups.count();
     int64_t dst_cnt = dst_part_groups.count();
     if (src_cnt != 0) {
       double ratio = static_cast<double>(dst_cnt) / static_cast<double>(src_cnt);
-      if (OB_INVALID_INDEX == bucket_idx || ratio > ratio_max) {
+      // first valid bucket
+      if (OB_INVALID_INDEX == bucket_idx) {
         ratio_max = ratio;
         bucket_idx = i;
-      } else if (abs(ratio - ratio_max) < OB_DOUBLE_EPSINON
-                && src_cnt < part_group_buckets_.at(bucket_idx).count()) {
+      // rate_max == ratio: transfer from the bucket with the minimum number of part groups
+      } else if (fabs(ratio - ratio_max) < OB_DOUBLE_EPSINON) {
+        if (src_cnt < part_group_buckets_.at(bucket_idx).count()) {
+          ratio_max = ratio;
+          bucket_idx = i;
+        }
+      } else if (ratio > ratio_max) {
         ratio_max = ratio;
         bucket_idx = i;
       }
@@ -264,7 +283,30 @@ int ObBalanceGroupUnit::get_transfer_out_bucket_(const ObBalanceGroupUnit &dst_u
   }
   if (OB_UNLIKELY(OB_INVALID_INDEX == bucket_idx)) {
     ret = OB_ENTRY_NOT_EXIST;
-    LOG_WARN("failed to get the bucket to transfer out", KR(ret), K_(part_group_buckets), K_(dst_unit.part_group_buckets));
+    LOG_WARN("failed to get the bucket to transfer out", KR(ret), K_(part_group_buckets),
+            K_(dst_unit.part_group_buckets));
+  }
+  return ret;
+}
+
+///////////////////////////////////////////////
+
+int ObBalanceGroupInfo::ObPartGroupIndex::init(const ObObjectID &bg_unit_id,
+                                              const int64_t bucket_idx,
+                                              const int64_t pg_idx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", KR(ret), K_(inited));
+  } else if (OB_UNLIKELY(!is_valid_id(bg_unit_id) || bucket_idx < 0 || pg_idx < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(bg_unit_id), K(bucket_idx), K(pg_idx));
+  } else {
+    bg_unit_id_ = bg_unit_id;
+    bucket_idx_ = bucket_idx;
+    pg_idx_ = pg_idx;
+    inited_ = true;
   }
   return ret;
 }
@@ -276,7 +318,7 @@ ObBalanceGroupInfo::~ObBalanceGroupInfo()
   inited_ = false;
   bg_id_.reset();
   ls_id_.reset();
-  for (hash::ObHashMap<ObObjectID, ObBalanceGroupUnit*>::iterator it = bg_units_.begin(); it != bg_units_.end(); it++) {
+  FOREACH(it, bg_units_) {
     ObBalanceGroupUnit *bg_unit = it->second;
     if (OB_ISNULL(bg_unit)) {
       bg_unit->~ObBalanceGroupUnit();
@@ -290,15 +332,17 @@ ObBalanceGroupInfo::~ObBalanceGroupInfo()
   last_part_group_ = NULL;
 }
 
-int ObBalanceGroupInfo::init(const ObBalanceGroupID &bg_id, const share::ObLSID &ls_id, const int64_t bucket_num)
+int ObBalanceGroupInfo::init(const ObBalanceGroupID &bg_id,
+                            const share::ObLSID &ls_id,
+                            const int64_t ls_num)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
-  } else if (OB_UNLIKELY(!bg_id.is_valid() || !ls_id.is_valid() || bucket_num <= 0)) {
+  } else if (OB_UNLIKELY(!bg_id.is_valid() || !ls_id.is_valid() || ls_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(bg_id), K(bucket_num));
+    LOG_WARN("invalid argument", KR(ret), K(bg_id), K(ls_num));
   } else if (OB_FAIL(bg_units_.create(MAP_BUCKET_NUM, "BGUnits"))) {
     LOG_WARN("fail to create bg_units", KR(ret));
   } else {
@@ -307,13 +351,14 @@ int ObBalanceGroupInfo::init(const ObBalanceGroupID &bg_id, const share::ObLSID 
     last_part_group_uid_ = OB_INVALID_ID;
     last_part_group_ = NULL;
     part_group_cnt_ = 0;
-    bucket_num_ = bucket_num;
+    bucket_num_ = bg_id.is_non_part_table_bg() ? 1 : ls_num;
     inited_ = true;
   }
   return ret;
 }
 
-int ObBalanceGroupInfo::append_part(const ObObjectID bg_unit_id,
+int ObBalanceGroupInfo::append_part(
+    const ObObjectID &bg_unit_id,
     const uint64_t part_group_uid,
     const ObTransferPartInfo &part,
     const int64_t data_size)
@@ -329,7 +374,8 @@ int ObBalanceGroupInfo::append_part(const ObObjectID bg_unit_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(part), K(data_size), K(part_group_uid), K(bg_unit_id));
   } else if (OB_FAIL(create_new_part_group_if_needed_(part_group_uid, bg_unit_id))) {
-    LOG_WARN("create new part group if needed failed", KR(ret), K(part_group_uid), K_(last_part_group_uid));
+    LOG_WARN("create new part group if needed failed", KR(ret), K(part_group_uid),
+            K_(last_part_group_uid));
   } else if (OB_ISNULL(part_group = last_part_group_)) {
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("no partition groups in this balance group", KPC(this), KR(ret), K(part));
@@ -337,13 +383,15 @@ int ObBalanceGroupInfo::append_part(const ObObjectID bg_unit_id,
     LOG_WARN("add part into partition group fail", KR(ret),
         KPC(part_group), K(part), K(data_size), K(part_group_uid), KPC(this));
   } else {
-    LOG_TRACE("[ObBalanceGroupInfo] append part", K(part), K(data_size), K(bg_unit_id), K(part_group_uid),
-        "part_group_count", part_group_cnt_, KPC(part_group));
+    LOG_TRACE("[ObBalanceGroupInfo] append part", K(part), K(data_size), K(bg_unit_id),
+              K(part_group_uid), "part_group_count", part_group_cnt_, KPC(part_group));
   }
   return ret;
 }
 
-int ObBalanceGroupInfo::create_new_part_group_if_needed_(const uint64_t part_group_uid, const ObObjectID bg_unit_id)
+int ObBalanceGroupInfo::create_new_part_group_if_needed_(
+    const uint64_t part_group_uid,
+    const ObObjectID &bg_unit_id)
 {
   int ret = OB_SUCCESS;
   if (part_group_uid != last_part_group_uid_) {
@@ -360,7 +408,7 @@ int ObBalanceGroupInfo::create_new_part_group_if_needed_(const uint64_t part_gro
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("construct ObTransferPartGroup fail", KR(ret), K(buf), K(part_group_size));
     } else if (OB_FAIL(get_or_create_bg_unit_(bg_unit_id, bg_unit))) {
-      LOG_WARN("create new balance group unit fail");
+      LOG_WARN("get or create new balance group unit fail", KR(ret), K(bg_unit_id));
     } else if (OB_ISNULL(bg_unit)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("bg_unit is null", KR(ret), K(bg_unit));
@@ -388,18 +436,20 @@ int ObBalanceGroupInfo::create_new_part_group_if_needed_(const uint64_t part_gro
 //        unit_db0  unit_db1  unit_db2
 // ls0:       2       4          6
 // ls1:       0       0          0
-// it will transfer out 6 part group from unit_db2, unit_db1, unit_db0, unit_db2, unit_db1, unit_db2, respectively
+// it will transfer out 6 part group from unit_db2, unit_db1, unit_db0, unit_db2,
+// unit_db1, unit_db2, respectively
 //        unit_db0  unit_db1  unit_db2
 // ls0:       1       2          3
 // ls1:       1       2          3
-int ObBalanceGroupInfo::get_transfer_out_unit_(const ObBalanceGroupInfo &dst_bg_info, ObObjectID &bg_unit_id)
+int ObBalanceGroupInfo::get_transfer_out_unit_(
+    const ObBalanceGroupInfo &dst_bg_info,
+    ObObjectID &bg_unit_id) const
 {
   int ret = OB_SUCCESS;
   double ratio_min = DBL_MAX;
   int64_t src_cnt_max = 0;
   bg_unit_id = OB_INVALID_ID;
-  for (hash::ObHashMap<ObObjectID, ObBalanceGroupUnit*>::iterator it = bg_units_.begin();
-      OB_SUCC(ret) && it != bg_units_.end(); it++) {
+  FOREACH_X(it, bg_units_, OB_SUCC(ret)) {
     const ObObjectID unit_id_cur = it->first;
     const ObBalanceGroupUnit *src_bg_unit = it->second;
     ObBalanceGroupUnit *dst_bg_unit = NULL;
@@ -426,12 +476,19 @@ int ObBalanceGroupInfo::get_transfer_out_unit_(const ObBalanceGroupInfo &dst_bg_
     if (OB_FAIL(ret)) {
     } else if (0 != src_cnt) {
       ratio = static_cast<double>(dst_cnt) / static_cast<double>(src_cnt);
-      if (OB_INVALID_ID == bg_unit_id || ratio < ratio_min) {
+      // first valid unit
+      if (OB_INVALID_ID == bg_unit_id) {
         ratio_min = ratio;
         bg_unit_id = unit_id_cur;
         src_cnt_max = src_cnt;
-      } else if (abs(ratio - ratio_min) < OB_DOUBLE_EPSINON
-                && src_cnt > src_cnt_max) {
+      // ratio == ratio min: transfer from the unit with the maximum number of part groups
+      } else if (fabs(ratio - ratio_min) < OB_DOUBLE_EPSINON) {
+        if (src_cnt > src_cnt_max) {
+          ratio_min = ratio;
+          bg_unit_id = unit_id_cur;
+          src_cnt_max = src_cnt;
+        }
+      } else if (ratio < ratio_min) {
         ratio_min = ratio;
         bg_unit_id = unit_id_cur;
         src_cnt_max = src_cnt;
@@ -446,10 +503,13 @@ int ObBalanceGroupInfo::get_transfer_out_unit_(const ObBalanceGroupInfo &dst_bg_
   return ret;
 }
 
-int ObBalanceGroupInfo::get_or_create_bg_unit_(const ObObjectID bg_unit_id, ObBalanceGroupUnit *&bg_unit)
+int ObBalanceGroupInfo::get_or_create_bg_unit_(
+    const ObObjectID &bg_unit_id,
+    ObBalanceGroupUnit *&bg_unit)
 {
   int ret = OB_SUCCESS;
   void *buf = NULL;
+  bg_unit = NULL;
   if (OB_FAIL(bg_units_.get_refactored(bg_unit_id, bg_unit))) {
     if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
       if (OB_ISNULL(buf = alloc_.alloc(sizeof(ObBalanceGroupUnit)))) {
@@ -470,7 +530,8 @@ int ObBalanceGroupInfo::get_or_create_bg_unit_(const ObObjectID bg_unit_id, ObBa
   return ret;
 }
 
-int ObBalanceGroupInfo::transfer_out(ObBalanceGroupInfo &dst_bg_info, ObTransferPartGroup *&part_group)
+int ObBalanceGroupInfo::transfer_out(ObBalanceGroupInfo &dst_bg_info,
+                                    ObTransferPartGroup *&part_group)
 {
   int ret = OB_SUCCESS;
   ObObjectID bg_unit_id = OB_INVALID_ID;
@@ -500,7 +561,8 @@ int ObBalanceGroupInfo::transfer_out(ObBalanceGroupInfo &dst_bg_info, ObTransfer
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("src_unit or dst_unit is null", KR(ret), K(src_unit), K(dst_unit));
   } else if (OB_FAIL(src_unit->transfer_out(*dst_unit, part_group))) {
-    LOG_WARN("failed to transfer out part group in the unit", KR(ret), K(bg_unit_id), K(*this), KPC(dst_unit));
+    LOG_WARN("failed to transfer out part group in the unit", KR(ret), K(bg_unit_id),
+            K(*this), KPC(dst_unit));
   } else {
     part_group_cnt_--;
     dst_bg_info.part_group_cnt_++;
@@ -512,7 +574,8 @@ int ObBalanceGroupInfo::transfer_out(ObBalanceGroupInfo &dst_bg_info, ObTransfer
   return ret;
 }
 
-int ObBalanceGroupInfo::transfer_out(const int64_t part_group_count,
+int ObBalanceGroupInfo::transfer_out(
+    const int64_t part_group_count,
     ObBalanceGroupInfo &dst_bg_info,
     share::ObTransferPartList &part_list,
     int64_t &removed_part_count)
@@ -524,7 +587,8 @@ int ObBalanceGroupInfo::transfer_out(const int64_t part_group_count,
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(!dst_bg_info.is_valid() || dst_bg_info.bg_id_ != bg_id_ || dst_bg_info.ls_id_== ls_id_)) {
+  } else if (OB_UNLIKELY(!dst_bg_info.is_valid() || dst_bg_info.bg_id_ != bg_id_
+                        || dst_bg_info.ls_id_== ls_id_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid dst_bg_info", KR(ret));
   } else if (OB_UNLIKELY(part_group_count > part_group_cnt_ || part_group_count <= 0)) {
@@ -546,18 +610,22 @@ int ObBalanceGroupInfo::transfer_out(const int64_t part_group_count,
   return ret;
 }
 
-int ObBalanceGroupInfo::get_largest_part_group(ObPartGroupLocation &pg_loc, ObTransferPartGroup *&part_group) const
+int ObBalanceGroupInfo::get_largest_part_group(
+    ObPartGroupIndex &pg_index,
+    ObTransferPartGroup *&part_group) const
 {
   int ret = OB_SUCCESS;
   part_group = NULL;
+  pg_index.reset();
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(inited));
   } else {
     int64_t largest_pg_size = 0;
-    pg_loc.reset();
-    for (hash::ObHashMap<ObObjectID, ObBalanceGroupUnit*>::const_iterator it = bg_units_.begin();
-        OB_SUCC(ret) && it != bg_units_.end(); ++it) {
+    ObObjectID largest_unit = OB_INVALID_ID;
+    int64_t largest_bucket = OB_INVALID_INDEX;
+    int64_t largest_pg = OB_INVALID_INDEX;
+    FOREACH_X(it, bg_units_, OB_SUCC(ret)) {
       const ObObjectID &bg_unit_id = it->first;
       const ObBalanceGroupUnit *bg_unit = it->second;
       ObTransferPartGroup *part_group_cur = NULL;
@@ -575,35 +643,42 @@ int ObBalanceGroupInfo::get_largest_part_group(ObPartGroupLocation &pg_loc, ObTr
       } else if (OB_ISNULL(part_group_cur)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("part group is null", KR(ret), K(part_group_cur));
-      } else if (!pg_loc.is_valid() || part_group_cur->get_data_size() > largest_pg_size) {
-        pg_loc.bg_unit_id = bg_unit_id;
-        pg_loc.bucket_idx = bucket_idx;
-        pg_loc.pg_idx = pg_idx;
+      } else if (OB_INVALID_ID == largest_unit
+                || part_group_cur->get_data_size() > largest_pg_size) {
+        largest_unit = bg_unit_id;
+        largest_bucket = bucket_idx;
+        largest_pg = pg_idx;
         largest_pg_size = part_group_cur->get_data_size();
         part_group = part_group_cur;
       }
     }
     if (OB_FAIL(ret)) { // empty
-    } else if (OB_UNLIKELY(!pg_loc.is_valid())) {
+    } else if (OB_UNLIKELY(OB_INVALID_ID == largest_unit)) {
       ret = OB_ENTRY_NOT_EXIST;
       LOG_WARN("failed to get the largest part group", KR(ret));
+    } else if (OB_FAIL(pg_index.init(largest_unit, largest_bucket, largest_pg))) {
+      LOG_WARN("fail to init pg_index", KR(ret), K(pg_index));
     }
   }
   return ret;
 }
 
-int ObBalanceGroupInfo::get_smallest_part_group(ObPartGroupLocation &pg_loc, ObTransferPartGroup *&part_group) const
+int ObBalanceGroupInfo::get_smallest_part_group(
+    ObPartGroupIndex &pg_index,
+    ObTransferPartGroup *&part_group) const
 {
   int ret = OB_SUCCESS;
   part_group = NULL;
+  pg_index.reset();
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(inited));
   } else {
-    int64_t largest_pg_size = 0;
-    pg_loc.reset();
-    for (hash::ObHashMap<ObObjectID, ObBalanceGroupUnit*>::const_iterator it = bg_units_.begin();
-        OB_SUCC(ret) && it != bg_units_.end(); ++it) {
+    int64_t smallest_pg_size = 0;
+    ObObjectID smallest_unit = OB_INVALID_ID;
+    int64_t smallest_bucket = OB_INVALID_INDEX;
+    int64_t smallest_pg = OB_INVALID_INDEX;
+    FOREACH_X(it, bg_units_, OB_SUCC(ret)) {
       const ObObjectID &bg_unit_id = it->first;
       const ObBalanceGroupUnit *bg_unit = it->second;
       ObTransferPartGroup *part_group_cur = NULL;
@@ -616,51 +691,57 @@ int ObBalanceGroupInfo::get_smallest_part_group(ObPartGroupLocation &pg_loc, ObT
         if (OB_LIKELY(OB_ENTRY_NOT_EXIST == ret)) {
           ret = OB_SUCCESS;
         } else {
-          LOG_WARN("fail to get the largest part group", KR(ret), K(bg_unit));
+          LOG_WARN("fail to get the smallest part group", KR(ret), K(bg_unit));
         }
       } else if (OB_ISNULL(part_group_cur)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("part group is null", KR(ret), K(part_group_cur));
-      } else if (!pg_loc.is_valid() || part_group_cur->get_data_size() < largest_pg_size)
-        pg_loc.bg_unit_id = bg_unit_id;
-        pg_loc.bucket_idx = bucket_idx;
-        pg_loc.pg_idx = pg_idx;
-        largest_pg_size = part_group_cur->get_data_size();
+      } else if (OB_INVALID_ID == smallest_unit
+                || part_group_cur->get_data_size() < smallest_pg_size)
+        smallest_unit = bg_unit_id;
+        smallest_bucket = bucket_idx;
+        smallest_pg = pg_idx;
+        smallest_pg_size = part_group_cur->get_data_size();
         part_group = part_group_cur;
     }
     if (OB_FAIL(ret)) { // empty
-    } else if (OB_UNLIKELY(!pg_loc.is_valid())) {
+    } else if (OB_UNLIKELY(OB_INVALID_ID == smallest_unit)) {
       ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("failed to get the largest part group", KR(ret));
+      LOG_WARN("failed to get the smallest part group", KR(ret));
+    } else if (OB_FAIL(pg_index.init(smallest_unit, smallest_bucket, smallest_pg))) {
+      LOG_WARN("fail to init pg_index", KR(ret), K(pg_index));
     }
   }
   return ret;
 }
 
-int ObBalanceGroupInfo::remove_part_group(const ObPartGroupLocation &pg_loc)
+int ObBalanceGroupInfo::remove_part_group(const ObPartGroupIndex &pg_index)
 {
   int ret = OB_SUCCESS;
   ObBalanceGroupUnit *bg_unit = NULL;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not init", KR(ret), K_(inited));
-  } else if (OB_UNLIKELY(!pg_loc.is_valid())) {
+  } else if (OB_UNLIKELY(!pg_index.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("pg_loc is invalid", KR(ret), K(pg_loc));
-  } else if (OB_FAIL(bg_units_.get_refactored(pg_loc.bg_unit_id, bg_unit))) {
-    LOG_WARN("failed to get balance group unit", KR(ret), K(pg_loc.bg_unit_id));
+    LOG_WARN("pg_index is invalid", KR(ret), K(pg_index));
+  } else if (OB_FAIL(bg_units_.get_refactored(pg_index.bg_unit_id(), bg_unit))) {
+    LOG_WARN("failed to get balance group unit", KR(ret), K(pg_index.bg_unit_id()));
   } else if (OB_ISNULL(bg_unit)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("balance group unit is null", KR(ret), K(pg_loc.bg_unit_id));
-  } else if (OB_FAIL(bg_unit->remove_part_group(pg_loc.bucket_idx, pg_loc.pg_idx))) {
-    LOG_WARN("failed to remove part group", KR(ret), K(pg_loc.bucket_idx), K(pg_loc.pg_idx));
+    LOG_WARN("balance group unit is null", KR(ret), K(pg_index.bg_unit_id()));
+  } else if (OB_FAIL(bg_unit->remove_part_group(pg_index.bucket_idx(), pg_index.pg_idx()))) {
+    LOG_WARN("failed to remove part group", KR(ret), K(pg_index.bucket_idx()), K(pg_index.pg_idx()));
   } else {
     part_group_cnt_--;
   }
   return ret;
 }
 
-int ObBalanceGroupInfo::append_part_group(const ObObjectID bg_unit_id, const int64_t bucket_idx, ObTransferPartGroup *const pg)
+int ObBalanceGroupInfo::append_part_group(
+    const ObObjectID &bg_unit_id,
+    const int64_t bucket_idx,
+    ObTransferPartGroup *const pg)
 {
   int ret = OB_SUCCESS;
   ObBalanceGroupUnit *bg_unit = NULL;
@@ -675,7 +756,7 @@ int ObBalanceGroupInfo::append_part_group(const ObObjectID bg_unit_id, const int
   } else if (OB_ISNULL(bg_unit)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("balance group unit is null", KR(ret), K(bg_unit_id));
-  } else if (OB_FAIL(bg_unit->append_part_group(bucket_idx, pg))) {
+  } else if (OB_FAIL(bg_unit->append_part_group_into_bucket(bucket_idx, pg))) {
     LOG_WARN("failed to append part group", KR(ret), KPC(bg_unit), K(bucket_idx), K(pg));
   } else {
     part_group_cnt_++;

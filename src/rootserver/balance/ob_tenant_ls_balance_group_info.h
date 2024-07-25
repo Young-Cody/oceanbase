@@ -39,8 +39,7 @@ public:
       tenant_id_(OB_INVALID_TENANT_ID),
       alloc_("TenantLSBGInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       ls_bg_map_(),
-      ls_num_(0)
-  {}
+      ls_num_(0) {}
   ~ObTenantLSBalanceGroupInfo() { destroy(); }
 
   int init(const uint64_t tenant_id, int64_t ls_num);
@@ -51,10 +50,7 @@ public:
       common::ObMySQLProxy &sql_proxy,
       share::schema::ObMultiVersionSchemaService &schema_service);
 
-  int get(const share::ObLSID &ls_id, ObLSBalanceGroupInfo *&ls_bg_info) const
-  {
-    return ls_bg_map_.get_refactored(ls_id, ls_bg_info);
-  }
+  int get(const share::ObLSID &ls_id, ObLSBalanceGroupInfo *&ls_bg_info) const;
 
 public:
   // for ObAllBalanceGroupBuilder
@@ -74,7 +70,7 @@ public:
 
 public:
   int get_or_create(const share::ObLSID ls_id,
-      ObLSBalanceGroupInfo *&ls_bg_info);
+                    ObLSBalanceGroupInfo *&ls_bg_info);
 
 private:
   static const int64_t MAP_BUCKET_NUM = 100;

@@ -57,8 +57,9 @@ public:
   // @return OB_SUCCESS         success
   // @return OB_ENTRY_EXIST     no partition group found
   // @return other              fail
-  int append_part_into_balance_group(const ObBalanceGroupID &bg_id,
-      const ObObjectID bg_unit_id,
+  int append_part_into_balance_group(
+      const ObBalanceGroupID &bg_id,
+      const ObObjectID &bg_unit_id,
       const uint64_t part_group_uid,
       share::ObTransferPartInfo &part,
       const int64_t data_size);
@@ -68,13 +69,14 @@ public:
   //
   // NOTE: This function can be called only if all partitions are added.
   int transfer_out_by_factor(ObLSBalanceGroupInfo &dst_ls_bg_info,
-      const float factor, share::ObTransferPartList &part_list);
+                            const float factor,
+                            share::ObTransferPartList &part_list);
 
   TO_STRING_KV(K_(inited), K_(ls_id), "balance_group_count", bg_map_.size(), K_(ls_num));
 
 private:
   int get_or_create_(const ObBalanceGroupID &bg_id,
-      ObBalanceGroupInfo *&bg);
+                    ObBalanceGroupInfo *&bg);
 
 private:
   static const int64_t MAP_BUCKET_NUM = 4096;

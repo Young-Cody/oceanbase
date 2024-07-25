@@ -104,7 +104,7 @@ public:
 
     if (OB_FAIL(guard.switch_to(OB_SYS_TENANT_ID))) {
       LOG_WARN("switch tenant", KR(ret));
-    } else if (OB_FAIL(balance_part_job.init(OB_SYS_TENANT_ID, GCTX.schema_service_, GCTX.sql_proxy_, 1,1))) {
+    } else if (OB_FAIL(balance_part_job.init(OB_SYS_TENANT_ID, GCTX.schema_service_, GCTX.sql_proxy_, 1, 1))) {
       LOG_WARN("balance_part_job init fail", KR(ret));
     } else if (OB_FAIL(balance_part_job.process())) {
       LOG_WARN("balance_part_job process fail", KR(ret));
@@ -113,7 +113,7 @@ public:
         return left->partgroup_cnt_ < right->partgroup_cnt_;
       });
       LOG_INFO("balance_part_job bg_map size", K(balance_part_job.bg_map_.size()));
-      for (auto iter = balance_part_job.bg_map_.begin(); iter != balance_part_job.bg_map_.end(); iter++) {
+      FOREACH(iter, balance_part_job.bg_map_) {
         const ObBalanceGroup &bg = iter->first;
         const ObArray<ObBalanceGroupInfo*> &ls_part_groups = iter->second;
         for (int ls_idx = 0; ls_idx < ls_part_groups.count(); ls_idx++) {
@@ -149,7 +149,9 @@ public:
             }
             part_groups_str.append_fmt("]");
           }
-          LOG_INFO("balance_part_job bg_map", "balance group", bg.id_, "ls_id", part_groups->ls_id_, "part_group_count", part_groups->get_part_group_count(), "part_groups", part_groups_str);
+          LOG_INFO("balance_part_job bg_map", "balance group", bg.id_, "ls_id", part_groups->ls_id_,
+                  "part_group_count", part_groups->get_part_group_count(),
+                  "part_groups", part_groups_str);
         }
       }
       LOG_INFO("balance_part_job res", "size", balance_part_job.transfer_logical_tasks_.size(), "ls_array", balance_part_job.ls_desc_array_);

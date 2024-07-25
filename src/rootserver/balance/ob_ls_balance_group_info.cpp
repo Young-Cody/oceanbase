@@ -45,7 +45,7 @@ int ObLSBalanceGroupInfo::init(const ObLSID &ls_id, int64_t ls_num)
 
 void ObLSBalanceGroupInfo::destroy()
 {
-  for (auto iter = bg_map_.begin(); iter != bg_map_.end(); iter++) {
+  FOREACH(iter, bg_map_) {
     ObBalanceGroupInfo *bg = iter->second;
     if (OB_NOT_NULL(bg)) {
       bg->~ObBalanceGroupInfo();
@@ -61,8 +61,9 @@ void ObLSBalanceGroupInfo::destroy()
   inited_ = false;
 }
 
-int ObLSBalanceGroupInfo::append_part_into_balance_group(const ObBalanceGroupID &bg_id,
-    const ObObjectID bg_unit_id,
+int ObLSBalanceGroupInfo::append_part_into_balance_group(
+    const ObBalanceGroupID &bg_id,
+    const ObObjectID &bg_unit_id,
     const uint64_t part_group_uid,
     share::ObTransferPartInfo &part,
     const int64_t data_size)
@@ -93,11 +94,10 @@ int ObLSBalanceGroupInfo::append_part_into_balance_group(const ObBalanceGroupID 
 }
 
 int ObLSBalanceGroupInfo::get_or_create_(const ObBalanceGroupID &bg_id,
-    ObBalanceGroupInfo *&bg)
+                                         ObBalanceGroupInfo *&bg)
 {
   int ret = OB_SUCCESS;
   int64_t bg_size = sizeof(ObBalanceGroupInfo);
-  int64_t bucket_num = bg_id.is_non_part_table_bg() ? 1 : ls_num_;
   void *buf = NULL;
   bg = NULL;
   if (OB_FAIL(bg_map_.get_refactored(bg_id, bg))) {
@@ -109,7 +109,7 @@ int ObLSBalanceGroupInfo::get_or_create_(const ObBalanceGroupID &bg_id,
       } else if (OB_ISNULL(bg = new(buf) ObBalanceGroupInfo(alloc_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("construct ObBalanceGroupInfo fail", KR(ret), K(bg_size), K(buf), K(bg_id));
-      } else if (OB_FAIL(bg->init(bg_id, ls_id_, bucket_num))) {
+      } else if (OB_FAIL(bg->init(bg_id, ls_id_, ls_num_))) {
         LOG_WARN("init ObBalanceGroupInfo fail", KR(ret), KPC(bg));
       } else if (OB_FAIL(bg_map_.set_refactored(bg_id, bg))) {
         LOG_WARN("set into balance group map fail", KR(ret), K(bg_id), KPC(bg));
@@ -124,7 +124,8 @@ int ObLSBalanceGroupInfo::get_or_create_(const ObBalanceGroupID &bg_id,
 }
 
 int ObLSBalanceGroupInfo::transfer_out_by_factor(ObLSBalanceGroupInfo &dst_ls_bg_info,
-    const float factor, share::ObTransferPartList &part_list)
+                                                const float factor,
+                                                share::ObTransferPartList &part_list)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -134,7 +135,7 @@ int ObLSBalanceGroupInfo::transfer_out_by_factor(ObLSBalanceGroupInfo &dst_ls_bg
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("dst_ls_bg_info or factor is invalid", KR(ret));
   } else {
-    for (auto iter = bg_map_.begin(); OB_SUCC(ret) && iter != bg_map_.end(); ++iter) {
+    FOREACH_X(iter, bg_map_, OB_SUCC(ret)) {
       const ObBalanceGroupID &bg_id = iter->first;
       ObBalanceGroupInfo *src_bg_info = iter->second;
       ObBalanceGroupInfo *dst_bg_info = NULL;
@@ -142,7 +143,8 @@ int ObLSBalanceGroupInfo::transfer_out_by_factor(ObLSBalanceGroupInfo &dst_ls_bg
       // original count before transfer-out partitions
       const int64_t *total_count_ptr = orig_part_group_cnt_map_.get(bg_id);
 
-      if (OB_ISNULL(src_bg_info) || OB_ISNULL(total_count_ptr) || OB_UNLIKELY(0 == *total_count_ptr)) {
+      if (OB_ISNULL(src_bg_info) || OB_ISNULL(total_count_ptr)
+                    ||OB_UNLIKELY(0 == *total_count_ptr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("original part group count or balance group info is invalid, unexpected", KR(ret),
             K(total_count_ptr), K(bg_id), KPC(src_bg_info));
@@ -175,7 +177,8 @@ int ObLSBalanceGroupInfo::transfer_out_by_factor(ObLSBalanceGroupInfo &dst_ls_bg
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("remove count should be greater than avail count", K(avail_count), K(remove_count));
           // transfer out part only when remove count > 0
-        } else if (OB_LIKELY(remove_count > 0) && OB_FAIL(src_bg_info->transfer_out(remove_count, *dst_bg_info, part_list, removed_part_count))) {
+        } else if (OB_LIKELY(remove_count > 0) && OB_FAIL(src_bg_info->transfer_out(remove_count,
+                  *dst_bg_info, part_list, removed_part_count))) {
           LOG_WARN("remove from balance group fail", KR(ret), K(remove_count), K(part_list),
                 KPC(src_bg_info), KPC(dst_bg_info));
         }
