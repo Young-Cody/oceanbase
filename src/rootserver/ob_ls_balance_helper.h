@@ -246,9 +246,9 @@ private:
   //    param[in] target_ls_id: the normal ls which the splitted part groups will be located eventually
   //    for example: when ls_num 3 -> 2, generate ls_split(1003, 1004)
   //                 target_ls_id is 1001
-  int generate_ls_split_task_(const ObSplitLSParamArray &dest_split_param,
+  int generate_ls_split_task_(const ObSplitLSParam &dest_split_param,
                               share::ObLSID &target_ls_id,
-                              int64_t &task_begin_index);
+                              share::ObLSID &new_ls_id);
   int prepare_ls_partition_info_();
   int add_ls_part_info(const share::ObLSID &ls_id, const share::ObTransferPartInfo &part_info,
                         const ObBalanceGroupID &bg_id);
@@ -257,7 +257,9 @@ private:
                               share::ObTransferPartList &part_list);
   int generate_ls_alter_task_(const share::ObLSStatusInfo &ls_status_info, ObUnitGroupBalanceInfo &dest_unit_group);
   int generate_task_for_shrink_(const ObSplitLSParamArray &src_split_param, const share::ObLSStatusInfo &ls_status_info);
-  int generate_transfer_task_(const ObSplitLSParam &param, const share::ObLSStatusInfo &ls_status_info);
+  int generate_ls_transfer_task_(const ObSplitLSParam &param,
+                                const share::ObLSID &dest_ls_id,
+                                const uint64_t ls_group_id);
   //for task
   int construct_ls_alter_task_(const share::ObLSID &ls_id, const uint64_t ls_group_id);
   int construct_ls_merge_task_(const share::ObLSID &src_ls_id,

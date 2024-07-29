@@ -584,29 +584,25 @@ int ObLSBalanceTaskHelper::generate_task_for_shrink_(
     ret = OB_ERR_UNDEFINED;
     LOG_WARN("error unexpected", KR(ret), K(job_), K(src_split_param), K(ls_status_info));
   } else {
+    ObLSID target_ls_id = ls_status_info.get_ls_id();
     for (int64_t i = 0; OB_SUCC(ret) && i < src_split_param.count(); ++i) {
       const ObSplitLSParam &param = src_split_param.at(i);
       ObLSID merge_ls_id;
-      ObLSID target_ls_id = ls_status_info.ls_id_;
       if (fabs(param.get_current_factor() - 1.0) < OB_DOUBLE_EPSINON) {
         //nothing
         merge_ls_id = param.get_ls_info()->ls_id_;
       } else {
         if (param.get_ls_info()->ls_group_id_ == ls_status_info.ls_group_id_) {
           //need_transfer, no need merge
-          if (OB_FAIL(generate_transfer_task_(param, ls_status_info))) {
+          if (OB_FAIL(generate_ls_transfer_task_(param,
+                                                ls_status_info.get_ls_id(),
+                                                ls_status_info.ls_group_id_))) {
             LOG_WARN("failed to generate transfer task", KR(ret), K(param));
           }
         } else {
           // need split
-          ObSplitLSParamArray tmp_split_param;
-          int64_t task_index = OB_INVALID_INDEX_INT64;
-          if (OB_FAIL(tmp_split_param.push_back(param))) {
-            LOG_WARN("failed to push back param", KR(ret), K(param));
-          } else if (OB_FAIL(generate_ls_split_task_(tmp_split_param, target_ls_id, task_index))) {
-            LOG_WARN("failed to generate ls info", KR(ret), K(tmp_split_param));
-          } else {
-            merge_ls_id = task_array_.at(task_index).get_dest_ls_id();
+          if (OB_FAIL(generate_ls_split_task_(param, target_ls_id, merge_ls_id))) {
+            LOG_WARN("failed to generate ls info", KR(ret), K(param));
           }
         }
       }
@@ -700,26 +696,28 @@ int ObLSBalanceTaskHelper::generate_task_for_dup_ls_shrink_()
   return ret;
 }
 
-int ObLSBalanceTaskHelper::generate_transfer_task_(
-    const ObSplitLSParam &param, const ObLSStatusInfo &ls_status_info)
+int ObLSBalanceTaskHelper::generate_ls_transfer_task_(
+    const ObSplitLSParam &param,
+    const share::ObLSID &dest_ls_id,
+    const uint64_t ls_group_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(!param.is_valid() || !ls_status_info.is_valid())) {
+  } else if (OB_UNLIKELY(!param.is_valid() || !dest_ls_id.is_valid() || !is_valid_id(ls_group_id))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(param), K(ls_status_info));
+    LOG_WARN("invalid argument", KR(ret), K(param), K(dest_ls_id), K(ls_group_id));
   } else {
     ObTransferPartList part_list;
-    if (OB_FAIL(construct_ls_part_info_(param, ls_status_info.ls_id_, part_list))) {
+    if (OB_FAIL(construct_ls_part_info_(param, dest_ls_id, part_list))) {
       LOG_WARN("failed to construct ls part info", KR(ret), K(param));
     } else if (OB_FAIL(add_ls_transfer_task(
         tenant_id_,
         job_.get_job_id(),
-        ls_status_info.ls_group_id_,
+        ls_group_id,
         param.get_ls_info()->ls_id_,
-        ls_status_info.ls_id_,
+        dest_ls_id,
         part_list,
         job_.get_balance_strategy(),
         task_array_))) {
@@ -837,30 +835,37 @@ int ObLSBalanceTaskHelper::generate_balance_task_for_expand_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected", KR(ret), K(job_), K(dest_split_param), K(ls_group_id));
   } else {
-    //generate new ls info for split
-    int64_t task_begin_index = OB_INVALID_INDEX_INT64;
     ObLSID target_ls_id;
-    if (OB_FAIL(generate_ls_split_task_(dest_split_param, target_ls_id, task_begin_index))) {
-      LOG_WARN("failed to generate ls info", KR(ret), K(dest_split_param));
-    } else if (OB_UNLIKELY(task_begin_index < 0 || task_begin_index > task_array_.count())) {
+    ObLSID new_ls_id;
+    if (OB_FAIL(generate_ls_split_task_(dest_split_param.at(0), target_ls_id, new_ls_id))) {
+      LOG_WARN("failed to generate ls split task", KR(ret), K(dest_split_param));
+    } else if (OB_ISNULL(dest_split_param.at(0).get_ls_info())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("task_begin_index is invalid", KR(ret), K(task_begin_index));
-    }
-
-    for (int64_t i = task_begin_index; OB_SUCC(ret) && i < task_array_.count(); ++i) {
-      if (ls_group_id != task_array_.at(i).get_ls_group_id()) {
-        if (OB_FAIL(construct_ls_alter_task_(task_array_.at(i).get_dest_ls_id(), ls_group_id))) {
-          LOG_WARN("failed to init task", KR(ret), K(task_array_.at(i)), K(ls_group_id));
-        }
+      LOG_WARN("ls info is null", KR(ret), K(dest_split_param.at(0)));
+    } else if (ls_group_id != dest_split_param.at(0).get_ls_info()->get_ls_group_id()) {
+      if (OB_FAIL(construct_ls_alter_task_(target_ls_id, ls_group_id))) {
+        LOG_WARN("failed to construct ls alter task", KR(ret), K(target_ls_id), K(ls_group_id));
       }
     }
-
-    for (int64_t i = task_begin_index + 1; OB_SUCC(ret) && i < task_array_.count(); ++i) {
-      if (task_array_.at(i).get_task_type().is_split_task()) {
-        if (OB_FAIL(construct_ls_merge_task_(task_array_.at(i).get_dest_ls_id(),
-                                            target_ls_id, ls_group_id))) {
-          LOG_WARN("failed to construct ls merge task", KR(ret),
-                  K(task_array_.at(i)), K(target_ls_id), K(ls_group_id));
+    for (int64_t i = 1; OB_SUCC(ret) && i < dest_split_param.count(); ++i) {
+      const ObSplitLSParam &split_param = dest_split_param.at(i);
+      const ObLSStatusInfo *ls_info = split_param.get_ls_info();
+      if (OB_ISNULL(ls_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls info is null", KR(ret), K(split_param));
+      } else if (ls_group_id != ls_info->get_ls_group_id()) {
+        if (OB_FAIL(generate_ls_split_task_(split_param, target_ls_id, new_ls_id))) {
+          LOG_WARN("failed to generate ls split task", KR(ret), K(split_param));
+        } else if (OB_FAIL(construct_ls_alter_task_(new_ls_id, ls_group_id))) {
+          LOG_WARN("failed to construct ls alter task", KR(ret), K(new_ls_id), K(ls_group_id));
+        } else if (OB_FAIL(construct_ls_merge_task_(new_ls_id, target_ls_id, ls_group_id))) {
+          LOG_WARN("failed to construct ls merge task", KR(ret), K(new_ls_id),
+                  K(target_ls_id), K(ls_group_id));
+        }
+      } else {
+        if (OB_FAIL(generate_ls_transfer_task_(split_param, target_ls_id, ls_group_id))) {
+          LOG_WARN("failed to generate ls transfer task", KR(ret), K(split_param),
+                  K(target_ls_id), K(ls_group_id));
         }
       }
     }
@@ -868,31 +873,30 @@ int ObLSBalanceTaskHelper::generate_balance_task_for_expand_(
   return ret;
 }
 
-int ObLSBalanceTaskHelper::generate_ls_split_task_(const ObSplitLSParamArray &dest_split_param,
-                                                  share::ObLSID &target_ls_id,
-                                                  int64_t &task_begin_index)
+int ObLSBalanceTaskHelper::generate_ls_split_task_(
+    const ObSplitLSParam &dest_split_param,
+    ObLSID &target_ls_id,
+    ObLSID &new_ls_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_) || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret), KP(sql_proxy_));
-  } else if (OB_UNLIKELY(!job_.is_valid() || dest_split_param.count() <= 0)) {
+    LOG_WARN("not init", KR(ret), KP_(sql_proxy));
+  } else if (OB_UNLIKELY(!job_.is_valid() || !dest_split_param.is_valid())) {
     ret = OB_ERR_UNDEFINED;
-    LOG_WARN("error unexpected", KR(ret), K(job_), K(dest_split_param));
-  }
-  ObTransferPartList part_list;
-  task_begin_index = task_array_.count();
-  for (int64_t i = 0; OB_SUCC(ret) && i < dest_split_param.count(); ++i) {
+    LOG_WARN("error unexpected", KR(ret), K_(job), K(dest_split_param));
+  } else {
+    ObTransferPartList part_list;
+    const share::ObLSStatusInfo *src_ls = dest_split_param.get_ls_info();
+    new_ls_id.reset();
     // split task has equal ls group id with source
-    ObLSID dest_ls_id;
-    const share::ObLSStatusInfo *src_ls = dest_split_param.at(i).get_ls_info();
     if (OB_ISNULL(src_ls)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("src ls is null", KR(ret), K(i), K(dest_split_param));
-    } else if (OB_FAIL(ObLSServiceHelper::fetch_new_ls_id(sql_proxy_, tenant_id_, dest_ls_id))) {
+      LOG_WARN("src ls is null", KR(ret), K(dest_split_param));
+    } else if (OB_FAIL(ObLSServiceHelper::fetch_new_ls_id(sql_proxy_, tenant_id_, new_ls_id))) {
       LOG_WARN("failed to fetch new ls id", KR(ret), K_(tenant_id));
-    } else if (!target_ls_id.is_valid() && FALSE_IT(target_ls_id = dest_ls_id)) {
-    } else if (OB_FAIL(construct_ls_part_info_(dest_split_param.at(i), target_ls_id, part_list))) {
+    } else if (!target_ls_id.is_valid() && FALSE_IT(target_ls_id = new_ls_id)) {
+    } else if (OB_FAIL(construct_ls_part_info_(dest_split_param, target_ls_id, part_list))) {
       LOG_WARN("failed to construct ls part info", KR(ret), KPC(src_ls));
     } else if (OB_FAIL(add_ls_split_task(
         sql_proxy_,
@@ -902,9 +906,10 @@ int ObLSBalanceTaskHelper::generate_ls_split_task_(const ObSplitLSParamArray &de
         src_ls->ls_id_,
         part_list,
         job_.get_balance_strategy(),
-        dest_ls_id,
+        new_ls_id,
         task_array_))) {
-      LOG_WARN("add ls split task failed", KR(ret), K(tenant_id_), K(job_), KPC(src_ls), K(dest_ls_id), K(part_list));
+      LOG_WARN("add ls split task failed", KR(ret), K(tenant_id_), K(job_), KPC(src_ls),
+              K(new_ls_id), K(part_list));
     }
   }
   return ret;
