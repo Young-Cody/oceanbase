@@ -231,7 +231,7 @@ struct ObLSAttr
   {
     return ls_is_normal_status(status_);
   }
-  ObLSID get_ls_id() const 
+  ObLSID get_ls_id() const
   {
     return id_;
   }
@@ -244,12 +244,12 @@ struct ObLSAttr
   {
     return status_;
   }
-  
+
   ObLSOperationType get_ls_operation_type() const
   {
     return operation_type_;
   }
-  
+
   ObLSFlag get_ls_flag() const
   {
     return flag_;
@@ -343,7 +343,7 @@ public:
       ObLSAttr &ls_attr, bool only_existing_ls = true);
   int get_pre_tenant_dropping_ora_rowscn(share::SCN &pre_tenant_dropping_ora_rowscn);
   /*
-   * description: get all ls with snapshot 
+   * description: get all ls with snapshot
    * @param[in] read_scn:the snapshot of read_version
    * @param[out] ObLSAttrIArray ls_info in __all_ls
    * @params[in] only_existing_ls : Mark whether to get the LS that has been deleted or create_abort

@@ -176,6 +176,7 @@ elseif(OB_INCLUDE_UNITTEST)
     add_subdirectory(mittest EXCLUDE_FROM_ALL)
   endif()
 endif()
+add_subdirectory(mittest)
 
 if(OB_BUILD_CLOSE_MODULES)
   if (OB_BUILD_TEST)

@@ -1,8 +1,8 @@
 function(rs_unittest case)
   ob_unittest(${ARGV})
-  target_sources(${case} PRIVATE 
-  ob_rs_test_utils.h 
-  ob_rs_test_utils.cpp 
+  target_sources(${case} PRIVATE
+  ob_rs_test_utils.h
+  ob_rs_test_utils.cpp
   fake_zone_manager.cpp
   fake_freeze_info_manager.cpp
   fake_zone_merge_manager.cpp
@@ -23,3 +23,4 @@ rs_unittest(test_archive_checkpoint)
 rs_unittest(test_import_table)
 rs_unittest(test_heartbeat_service)
 rs_unittest(test_parallel_ddl_control)
+rs_unittest(test_partition_balance)

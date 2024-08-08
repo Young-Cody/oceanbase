@@ -727,7 +727,7 @@ int ObRRPartGroupContainer::select(
     int64_t pg_idx = OB_INVALID_INDEX;
     ObTransferPartGroup *part_group = nullptr;
     if (OB_FAIL(get_transfer_out_unit_(dst_pg_rr, bg_unit_id))) {
-    LOG_WARN("failed to get the unit to transfer out", KR(ret), KPC(this), K(dst_pg_rr));
+      LOG_WARN("failed to get the unit to transfer out", KR(ret), KPC(this), K(dst_pg_rr));
     } else if (OB_FAIL(bg_units_.get_refactored(bg_unit_id, src_unit))) {
       // src_unit must exist
       LOG_WARN("get src_unit fail", KR(ret), K(bg_unit_id));

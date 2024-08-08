@@ -52,7 +52,7 @@ public:
   const ObPartDistributionMode &get_part_distribution_mode() const { return part_distribution_mode_; }
   ObTransferPartGroup *part_group() const { return part_group_; }
   virtual void reset() { part_group_ = nullptr; is_inited_ = false; }
-  virtual bool is_valid() const { return is_inited_; }
+  virtual bool is_valid() const { return is_inited_ && nullptr != part_group_; }
   VIRTUAL_TO_STRING_KV(K_(is_inited), KPC_(part_group));
 protected:
   ObIPartGroupInfo(const ObPartDistributionMode &distr_mode) :
@@ -63,6 +63,8 @@ protected:
   bool is_inited_;
   ObPartDistributionMode part_distribution_mode_;
   ObTransferPartGroup *part_group_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObIPartGroupInfo);
 };
 
 // interface of part group container
@@ -106,7 +108,7 @@ public:
 
   ~ObContinuousPartGroupInfo() override { pg_idx_ = OB_INVALID_INDEX; };
   void reset() override;
-  VIRTUAL_TO_STRING_KV(K_(is_inited), KPC_(part_group), K_(pg_idx));
+  TO_STRING_KV(K_(is_inited), KPC_(part_group), K_(pg_idx));
 private:
   ObContinuousPartGroupInfo() :
       ObIPartGroupInfo(ObPartDistributionMode::CONTINUOUS),
@@ -199,7 +201,7 @@ public:
 
   ~ObRRPartGroupInfo() override;
   void reset() override;
-  VIRTUAL_TO_STRING_KV(K_(is_inited), KPC_(part_group), K_(bg_unit_id), K_(bucket_idx), K_(pg_idx));
+  TO_STRING_KV(K_(is_inited), KPC_(part_group), K_(bg_unit_id), K_(bucket_idx), K_(pg_idx));
 private:
   ObRRPartGroupInfo() :
       ObIPartGroupInfo(ObPartDistributionMode::ROUND_ROBIN),

@@ -54,6 +54,16 @@ private:
   share::ObTransferPartList part_list_;
 };
 
+class ObPartGroupDataSizeCmp
+{
+public:
+  ObPartGroupDataSizeCmp() : ret_(OB_SUCCESS) {}
+  bool operator()(const ObTransferPartGroup *lhs, const ObTransferPartGroup *rhs);
+  int get_error_code() const { return ret_; }
+private:
+  int ret_;
+};
+
 // Balance Group Partition Info
 //
 // A group of Partition Groups (ObTransferPartGroup) that should be evenly distributed on all LS.
@@ -121,6 +131,16 @@ private:
   ObTransferPartGroup *last_part_group_;
   ObIAllocator &alloc_; // allocator for ObTransferPartGroup
   ObIPartGroupContainer *pg_container_;
+};
+
+class ObBGPartGroupCountCmp
+{
+public:
+  ObBGPartGroupCountCmp() : ret_(OB_SUCCESS) {}
+  bool operator()(const ObBalanceGroupInfo *lhs, const ObBalanceGroupInfo *rhs);
+  int get_error_code() const { return ret_; }
+private:
+  int ret_;
 };
 
 }

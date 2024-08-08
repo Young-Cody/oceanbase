@@ -32,21 +32,75 @@ class ObTransferPartGroup;
 class ObLSDesc
 {
 public:
-  ObLSDesc(share::ObLSID ls_id, uint64_t ls_group_id)
-      : ls_id_(ls_id), ls_group_id_(ls_group_id), partgroup_cnt_(0), data_size_(0) {}
+  ObLSDesc(share::ObLSID ls_id, uint64_t ls_group_id, uint64_t unit_group_id) :
+    ls_id_(ls_id),
+    ls_group_id_(ls_group_id),
+    unit_group_id_(unit_group_id),
+    partgroup_cnt_(0),
+    data_size_(0) {}
   ~ObLSDesc() {}
   share::ObLSID get_ls_id() const { return ls_id_; }
-  uint64_t get_partgroup_cnt() const { return partgroup_cnt_; }
+  uint64_t get_part_group_count() const { return partgroup_cnt_; }
   uint64_t get_data_size() const { return data_size_; }
   uint64_t get_ls_group_id() const { return ls_group_id_; }
+  uint64_t get_unit_group_id() const { return unit_group_id_; }
   void add_data_size(int64_t size) { data_size_ += size; }
   void add_partgroup(int64_t count, int64_t size) { partgroup_cnt_ += count; add_data_size(size); }
   TO_STRING_KV(K_(ls_id), K_(partgroup_cnt), K_(data_size));
 private:
   share::ObLSID ls_id_;
   uint64_t ls_group_id_;
+  uint64_t unit_group_id_;
   uint64_t partgroup_cnt_;
   uint64_t data_size_;
+};
+
+class ObLSPartGroupCountCmp
+{
+public:
+  ObLSPartGroupCountCmp() : ret_(OB_SUCCESS) {}
+  bool operator()(const ObLSDesc *lhs, const ObLSDesc *rhs);
+  int get_error_code() const { return ret_; }
+private:
+  int ret_;
+};
+
+class ObLSDataSizeCmp
+{
+public:
+  ObLSDataSizeCmp() : ret_(OB_SUCCESS) {}
+  bool operator()(const ObLSDesc *lhs, const ObLSDesc *rhs);
+  int get_error_code() const { return ret_; }
+private:
+  int ret_;
+};
+
+class ObUnitGroupLSDesc
+{
+public:
+  ObUnitGroupLSDesc() :
+    ls_desc_array_(),
+    data_size_(0) {}
+  ~ObUnitGroupLSDesc() {}
+  int add_ls_desc(ObLSDesc *const ls_desc);
+  int get_max_ls_desc(ObLSDesc *&ls_desc) const;
+  int get_min_ls_desc(ObLSDesc *&ls_desc) const;
+  void add_data_size(int64_t size) { data_size_ += size; }
+  uint64_t get_data_size() const { return data_size_; }
+  TO_STRING_KV(K_(ls_desc_array), K_(data_size));
+private:
+  ObArray<ObLSDesc*> ls_desc_array_;
+  uint64_t data_size_;
+};
+
+class ObUnitGroupDataSizeCmp
+{
+public:
+  ObUnitGroupDataSizeCmp() : ret_(OB_SUCCESS) {}
+  bool operator()(const ObUnitGroupLSDesc *lhs, const ObUnitGroupLSDesc *rhs);
+  int get_error_code() const { return ret_; }
+private:
+  int ret_;
 };
 
 typedef common::hash::ObHashMap<share::ObLSID, uint64_t> ObLSGroupIDMap;

@@ -158,6 +158,7 @@ struct ObLSStatusInfo
     return ls_id_;
   }
   uint64_t get_ls_group_id() const { return ls_group_id_; }
+  uint64_t get_unit_group_id() const { return unit_group_id_; }
 
   ObLSFlag get_flag() const
   {
@@ -290,10 +291,10 @@ public:
                       const ObTenantSwitchoverStatus &working_sw_status,
                       ObMySQLTransaction &trans) override;
   /*
-   * description: for primary cluster set ls to wait offline from tenant_dropping or dropping status 
+   * description: for primary cluster set ls to wait offline from tenant_dropping or dropping status
    * @param[in] tenant_id: tenant_id
    * @param[in] ls_id: need delete ls
-   * @param[in] ls_status: tenant_dropping or dropping status 
+   * @param[in] ls_status: tenant_dropping or dropping status
    * @param[in] drop_scn: there is no user data after drop_scn except offline
    * @param[in] working_sw_status only support working on specified switchover status
    * @param[in] trans
@@ -305,11 +306,11 @@ public:
                       const ObTenantSwitchoverStatus &working_sw_status,
                       ObMySQLTransaction &trans) override;
   /*
-   * description: update ls primary zone, need update __all_ls_status and __all_ls_election_reference 
+   * description: update ls primary zone, need update __all_ls_status and __all_ls_election_reference
    * @param[in] tenant_id: tenant_id
    * @param[in] ls_id: need update ls
-   * @param[in] primary_zone: primary zone of __all_ls_status 
-   * @param[in] zone_priority: primary zone of __all_ls_election_reference 
+   * @param[in] primary_zone: primary zone of __all_ls_status
+   * @param[in] zone_priority: primary zone of __all_ls_election_reference
    * @param[in] trans
    * */
   int update_ls_primary_zone(
@@ -317,10 +318,10 @@ public:
       const share::ObLSID &ls_id,
       const common::ObZone &primary_zone,
       const common::ObString &zone_priority,
-      ObMySQLTransaction &trans) override; 
+      ObMySQLTransaction &trans) override;
 public:
   /*
-   * description: update ls's status 
+   * description: update ls's status
    * @param[in] tenant_id
    * @param[in] ls_id
    * @param[in] old_status
@@ -329,7 +330,7 @@ public:
    * @param[in] client: sql client*/
   int update_ls_status(const uint64_t tenant_id, const ObLSID &id,
                        const ObLSStatus &old_status,
-                       const ObLSStatus &new_status, 
+                       const ObLSStatus &new_status,
                        const ObTenantSwitchoverStatus &working_sw_status,
                        ObMySQLProxy &client);
 
@@ -467,7 +468,7 @@ public:
       ObMySQLProxy &client);
 
   ////////////////////////////////////////////////////////////////////////////////
-  // Get all ls paxos from __all_virtual_ls_status and __all_virtual_log_stat except 
+  // Get all ls paxos from __all_virtual_ls_status and __all_virtual_log_stat except
   // those whose status is OB_LS_CREATE_ABORT. And then, check majority and log_in_sync.
   //
   // @param [in] zone_mgr: zone manager from rs
@@ -486,7 +487,7 @@ public:
       schema::ObMultiVersionSchemaService &schema_service,
       ObISQLClient &client,
       bool &need_retry);
-  // Get all ls paxos from __all_virtual_ls_status and __all_virtual_log_stat except 
+  // Get all ls paxos from __all_virtual_ls_status and __all_virtual_log_stat except
   // those whose status is OB_LS_CREATE_ABORT. And then, check each ls does have leader.
   // @param [in] client: sql client for inner sql
   // @param [in] print_str: string of operation. Used to print LOG_USER_ERROR "'print_str' not allowed"

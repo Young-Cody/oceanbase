@@ -33,7 +33,7 @@ int ObPartitionBalance::prepare_ls_()
   ls_desc_map_.create(10, lib::Label(""));
   int ls_cnt = g_ls_cnt;
   for (int i = 1; i <= ls_cnt; i++) {
-    auto ls_desc = new ObLSDesc(ObLSID(i), 0);
+    auto ls_desc = new ObLSDesc(ObLSID(i), 0, 0);
     ls_desc_array_.push_back(ls_desc);
     ls_desc_map_.set_refactored(ls_desc->ls_id_, ls_desc);
     job_generator_.ls_group_id_map_.set_refactored(ObLSID(i), 1001);
@@ -172,7 +172,7 @@ public:
     } else if (OB_FAIL(balance_part_job.process())) {
       LOG_WARN("balance_part_job process fail", KR(ret));
     } else {
-      std::sort(balance_part_job.ls_desc_array_.begin(), balance_part_job.ls_desc_array_.end(), [] (const ObLSDesc* left, const ObLSDesc* right) {
+      lib::ob_sort(balance_part_job.ls_desc_array_.begin(), balance_part_job.ls_desc_array_.end(), [] (const ObLSDesc* left, const ObLSDesc* right) {
         return left->partgroup_cnt_ < right->partgroup_cnt_;
       });
       TEST_INFO("balance_part_job bg_map size", K(balance_part_job.bg_map_.size()));

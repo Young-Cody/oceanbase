@@ -47,6 +47,7 @@ public:
                          bg_ls_stat_operator_(),
                          task_mode_(GEN_BG_STAT),
                          job_generator_(),
+                         bg_offset_(0),
                          part_distribution_mode_(ObPartDistributionMode::INVALID)
   {}
   ~ObPartitionBalance() {
@@ -89,11 +90,68 @@ public:
 private:
   int prepare_balance_group_();
   int save_balance_group_stat_();
+  template<class LSPartGroupType>
+  int get_part_group_count_inbalance_ls_(
+      const ObArray<LSPartGroupType *> &ls_pg_arr,
+      LSPartGroupType *&ls_more,
+      LSPartGroupType *&ls_less,
+      int64_t &transfer_cnt) const;
+  int get_balance_group_info_(
+      const ObArray<ObBalanceGroupInfo *> &bg_info_arr,
+      const ObLSDesc &ls_more_desc,
+      const ObLSDesc &ls_less_desc,
+      ObBalanceGroupInfo *&ls_more,
+      ObBalanceGroupInfo *&ls_less);
   // balance group inner balance
   int process_balance_partition_inner_();
   // balance group extend balance
   int process_balance_partition_extend_();
   // ls disk balance
+  int swap_part_group_(
+      ObBalanceGroupInfo &src_bg_ls,
+      ObBalanceGroupInfo &dst_bg_ls,
+      const ObIPartGroupInfo &src_pg,
+      const ObIPartGroupInfo &dst_pg);
+  int xfer_part_group_(
+      ObBalanceGroupInfo &src_bg_ls,
+      ObBalanceGroupInfo &dst_bg_ls,
+      const ObIPartGroupInfo &src_pg);
+  int try_swap_part_group_(
+      ObBalanceGroupInfo &src_bg_ls,
+      ObBalanceGroupInfo &dst_bg_ls,
+      const int64_t part_group_min_size,
+      const int64_t data_size_delta,
+      int64_t &balance_cnt);
+  int try_xfer_part_group_(
+      ObBalanceGroupInfo &src_bg_ls,
+      ObBalanceGroupInfo &dst_bg_ls,
+      const int64_t part_group_min_size,
+      const int64_t data_size_delta,
+      int64_t &balance_cnt);
+  int try_balance_ls_disk_(const ObArray<ObBalanceGroupInfo *> &bg_info_arr,
+                          const ObLSDesc &src_ls,
+                          const ObLSDesc &dest_ls,
+                          const int64_t part_group_min_size,
+                          const int64_t data_size_delta,
+                          int64_t &balance_cnt);
+  bool check_disk_inbalance_(uint64_t more_size, uint64_t less_size);
+  int build_unit_group_ls_desc_(ObArray<ObUnitGroupLSDesc *> &unit_group_ls_desc_arr);
+  int balance_inter_unit_group_disk_min_size_(ObUnitGroupLSDesc &unit_group_max,
+                                            ObUnitGroupLSDesc &unit_group_min,
+                                            const int64_t part_group_min_size,
+                                            int64_t &balance_cnt);
+  int balance_intra_unit_group_disk_min_size_(ObLSDesc &src_ls,
+                                            ObLSDesc &dest_ls,
+                                            const int64_t part_group_min_size,
+                                            int64_t &balance_cnt);
+  int balance_inter_unit_group_disk_(ObUnitGroupLSDesc &unit_group_max,
+                                    ObUnitGroupLSDesc &unit_group_min,
+                                    int64_t &balance_cnt);
+  int balance_intra_unit_group_disk_(ObLSDesc &ls_max,
+                                    ObLSDesc &ls_min,
+                                    int64_t &balance_cnt);
+  int try_balance_inter_unit_group_disk_(const ObArray<ObUnitGroupLSDesc *> &unit_group_ls_desc_arr);
+  int try_balance_intra_unit_group_disk_(const ObArray<ObUnitGroupLSDesc *> &unit_group_ls_desc_arr);
   int process_balance_partition_disk_();
 
   int prepare_ls_();
@@ -107,15 +165,9 @@ private:
   int add_transfer_task_(
       const ObLSID &src_ls_id,
       const ObLSID &dest_ls_id,
-      ObTransferPartGroup *part_group,
+      const ObTransferPartGroup *part_group,
       bool modify_ls_desc = true);
   int update_ls_desc_(const ObLSID &ls_id, int64_t cnt, int64_t size);
-  int try_swap_part_group_(ObLSDesc &src_ls,
-                          ObLSDesc &dest_ls,
-                          int64_t part_group_min_size,
-                          int64_t &swap_cnt);
-  bool check_ls_need_swap_(uint64_t ls_more_size, uint64_t ls_less_size);
-
 private:
   bool inited_;
   uint64_t tenant_id_;
@@ -136,8 +188,66 @@ private:
   TaskMode task_mode_;
   // record the partitions to be transferred and generate the corresponding balance job and tasks
   ObPartTransferJobGenerator job_generator_;
+  int64_t bg_offset_;
   ObPartDistributionMode part_distribution_mode_;
 };
+
+template<class LSPartGroupType>
+int ObPartitionBalance::get_part_group_count_inbalance_ls_(
+    const ObArray<LSPartGroupType *> &ls_pg_arr,
+    LSPartGroupType *&ls_more,
+    LSPartGroupType *&ls_less,
+    int64_t &transfer_cnt) const
+{
+  int ret = OB_SUCCESS;
+  int64_t ls_cnt = ls_pg_arr.count();
+  int64_t ls_more_dest = 0;
+  int64_t ls_less_dest = 0;
+  uint64_t part_group_sum = 0;
+  ls_more = nullptr;
+  ls_less = nullptr;
+  transfer_cnt = 0;
+  for (int64_t ls_idx = 0; OB_SUCC(ret) && ls_idx < ls_cnt; ls_idx++) {
+    const LSPartGroupType *ls_pg = ls_pg_arr.at(ls_idx);
+    if (OB_ISNULL(ls_pg)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("bg_info is null", KR(ret), KP(ls_pg), K(ls_pg_arr), K(ls_idx));
+    } else {
+      part_group_sum += ls_pg->get_part_group_count();
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else {
+    for (int64_t ls_idx = ls_pg_arr.count() - 1; ls_idx >= 0; ls_idx--) {
+      int64_t part_dest = ls_idx < (ls_cnt - (part_group_sum % ls_cnt))
+          ? part_group_sum / ls_cnt
+          : part_group_sum / ls_cnt + 1;
+      if (ls_pg_arr.at(ls_idx)->get_part_group_count() > part_dest) {
+        ls_more = ls_pg_arr.at(ls_idx);
+        ls_more_dest = part_dest;
+        break;
+      }
+    }
+    for (int64_t ls_idx = 0; ls_idx < ls_pg_arr.count(); ls_idx++) {
+      int64_t part_dest = ls_idx < (ls_cnt - (part_group_sum % ls_cnt))
+          ? part_group_sum / ls_cnt
+          : part_group_sum / ls_cnt + 1;
+      if (ls_pg_arr.at(ls_idx)->get_part_group_count() < part_dest) {
+        ls_less = ls_pg_arr.at(ls_idx);
+        ls_less_dest = part_dest;
+        break;
+      }
+    }
+    if (OB_ISNULL(ls_more) || OB_ISNULL(ls_less)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("not found dest ls", KR(ret));
+    } else {
+      transfer_cnt = MIN(ls_more->get_part_group_count() - ls_more_dest,
+                        ls_less_dest - ls_less->get_part_group_count());
+    }
+  }
+  return ret;
+}
 
 } // end rootserver
 } // end oceanbase

@@ -35,6 +35,26 @@ int ObTransferPartGroup::add_part(const ObTransferPartInfo &part, int64_t data_s
 
 ///////////////////////////////////////////////
 
+bool ObPartGroupDataSizeCmp::operator()(
+    const ObTransferPartGroup *lhs,
+    const ObTransferPartGroup *rhs)
+{
+  int ret = ret_;
+  bool cmp_res = false;
+  if (OB_FAIL(ret)) {
+    LOG_WARN("ObPartGroupDataSizeCmp is in error state", KR(ret));
+  } else if (OB_ISNULL(lhs) || OB_ISNULL(rhs)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(lhs), K(rhs));
+  } else {
+    cmp_res = lhs->get_data_size() < rhs->get_data_size();
+  }
+  ret_ = ret;
+  return cmp_res;
+}
+
+///////////////////////////////////////////////
+
 ObBalanceGroupInfo::~ObBalanceGroupInfo()
 {
   inited_ = false;
@@ -288,6 +308,28 @@ int ObBalanceGroupInfo::append_part_group(const ObIPartGroupInfo &pg_info)
     LOG_WARN("fail to append part group", KR(ret), KPC_(pg_container), K(pg_info));
   }
   return ret;
+}
+
+bool ObBGPartGroupCountCmp::operator()(
+    const ObBalanceGroupInfo *lhs,
+    const ObBalanceGroupInfo *rhs)
+{
+  int ret = ret_;
+  bool cmp_res = false;
+  if (OB_FAIL(ret)) {
+    LOG_WARN("ObBGPartGroupCountCmp is in error state", KR(ret));
+  } else if (OB_ISNULL(lhs) || OB_ISNULL(rhs)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(lhs), K(rhs));
+  } else {
+    if (lhs->get_part_group_count() == rhs->get_part_group_count()) {
+      cmp_res = lhs->get_ls_id() > rhs->get_ls_id();
+    } else {
+      cmp_res = lhs->get_part_group_count() < rhs->get_part_group_count();
+    }
+  }
+  ret_ = ret;
+  return cmp_res;
 }
 
 }

@@ -26,6 +26,118 @@ namespace rootserver
 {
 #define PB_INFO(fmt, args...) LOG_INFO("[PARTITION_BALANCE] " fmt, ##args)
 
+bool ObLSPartGroupCountCmp::operator()(const ObLSDesc *lhs, const ObLSDesc *rhs)
+{
+  int ret = ret_;
+  bool cmp_res = false;
+  if (OB_FAIL(ret)) {
+    LOG_WARN("ObLSPartGroupCountCmp is in error state", KR(ret));
+  } else if (OB_ISNULL(lhs) || OB_ISNULL(rhs)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(lhs), K(rhs));
+  } else {
+    if (lhs->get_part_group_count() == rhs->get_part_group_count()) {
+      if (lhs->get_data_size() == rhs->get_data_size()) {
+        cmp_res = lhs->get_ls_id() > rhs->get_ls_id();
+      } else {
+        cmp_res = lhs->get_data_size() < rhs->get_data_size();
+      }
+    } else {
+      cmp_res = lhs->get_part_group_count() < rhs->get_part_group_count();
+    }
+  }
+  ret_ = ret;
+  return cmp_res;
+}
+
+bool ObLSDataSizeCmp::operator()(const ObLSDesc *lhs, const ObLSDesc *rhs)
+{
+  int ret = ret_;
+  bool cmp_res = false;
+  if (OB_FAIL(ret)) {
+    LOG_WARN("ObLSDataSizeCmp is in error state", KR(ret));
+  } else if (OB_ISNULL(lhs) || OB_ISNULL(rhs)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(lhs), K(rhs));
+  } else {
+    cmp_res = lhs->get_data_size() < rhs->get_data_size();
+  }
+  ret_ = ret;
+  return cmp_res;
+}
+
+int ObUnitGroupLSDesc::add_ls_desc(ObLSDesc *const ls_desc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ls_desc)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_desc));
+  } else if (OB_FAIL(ls_desc_array_.push_back(ls_desc))) {
+    LOG_WARN("push back ls_desc failed", KR(ret), K_(ls_desc_array), KPC(ls_desc));
+  } else {
+    add_data_size(ls_desc->get_data_size());
+  }
+  return ret;
+}
+
+int ObUnitGroupLSDesc::get_max_ls_desc(ObLSDesc *&ls_desc) const
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObLSDesc*>::const_iterator it;
+  ObLSDataSizeCmp cmp;
+  ls_desc = nullptr;
+  if (OB_UNLIKELY(ls_desc_array_.empty())) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("ls_desc_array is empty", KR(ret));
+  } else if (FALSE_IT(it = std::max_element(ls_desc_array_.begin(), ls_desc_array_.end(), cmp))) {
+  } else if (OB_FAIL(cmp.get_error_code())) {
+    LOG_WARN("failed to get the max ls_desc", KR(ret));
+  } else if (OB_UNLIKELY(it == ls_desc_array_.end())
+            || OB_ISNULL(ls_desc = *it)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls_desc is null", KR(ret), K_(ls_desc_array), K(ls_desc));
+  }
+  return ret;
+}
+
+int ObUnitGroupLSDesc::get_min_ls_desc(ObLSDesc *&ls_desc) const
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObLSDesc*>::const_iterator it;
+  ObLSDataSizeCmp cmp;
+  ls_desc = nullptr;
+  if (OB_UNLIKELY(ls_desc_array_.empty())) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("ls_desc_array is empty", KR(ret));
+  } else if (FALSE_IT(it = std::min_element(ls_desc_array_.begin(), ls_desc_array_.end(), cmp))) {
+  } else if (OB_FAIL(cmp.get_error_code())) {
+    LOG_WARN("failed to get the min ls_desc", KR(ret));
+  } else if (OB_UNLIKELY(it == ls_desc_array_.end())
+            || OB_ISNULL(ls_desc = *it)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls_desc is null", KR(ret), K_(ls_desc_array), K(ls_desc));
+  }
+  return ret;
+}
+
+bool ObUnitGroupDataSizeCmp::operator()(
+    const ObUnitGroupLSDesc *lhs,
+    const ObUnitGroupLSDesc *rhs)
+{
+  int ret = ret_;
+  bool cmp_res = false;
+  if (OB_FAIL(ret)) {
+    LOG_WARN("ObUnitGroupDataSizeCmp is in error state", KR(ret));
+  } else if (OB_ISNULL(lhs) || OB_ISNULL(rhs)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(lhs), K(rhs));
+  } else {
+    cmp_res = lhs->get_data_size() < rhs->get_data_size();
+  }
+  ret_ = ret;
+  return cmp_res;
+}
+
 ObPartTransferJobGenerator::ObPartTransferJobGenerator()
     : inited_(false),
       tenant_id_(OB_INVALID_TENANT_ID),

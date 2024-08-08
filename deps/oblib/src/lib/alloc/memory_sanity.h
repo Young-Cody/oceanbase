@@ -12,7 +12,7 @@
 
 #ifndef _MEMORY_SANITY_H_
 #define _MEMORY_SANITY_H_
-#include "sanity/sanity.h"
+// #include "sanity/sanity.h"
 
 #ifndef ENABLE_SANITY
 #define SANITY_DISABLE_CHECK_RANGE()
